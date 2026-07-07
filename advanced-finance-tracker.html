@@ -72,8 +72,10 @@
     background: var(--surface); border: 1px solid var(--border);
     border-radius: 12px; padding: 12px;
   }
+  .metric.wide { grid-column: 1 / -1; }
   .metric .lbl { font-size: 11px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .04em; }
   .metric .val { font-size: 20px; font-weight: 700; margin-top: 2px; }
+  .metric .val-extra { font-size: 12px; font-weight: 600; color: var(--ink-2); margin-top: 2px; }
 
   .card {
     background: var(--surface); border: 1px solid var(--border);
@@ -158,11 +160,12 @@
     display: flex; padding-bottom: env(safe-area-inset-bottom);
   }
   nav.bottom button {
-    flex: 1; background: none; border: none; color: var(--ink-muted);
-    padding: 8px 0 6px; font-size: 11px; cursor: pointer; display: flex; flex-direction: column;
+    flex: 1; min-width: 0; background: none; border: none; color: var(--ink-muted);
+    padding: 7px 2px 5px; font-size: 10px; cursor: pointer; display: flex; flex-direction: column;
     align-items: center; gap: 2px;
   }
-  nav.bottom button .ico { font-size: 20px; line-height: 1; }
+  nav.bottom button .ico { font-size: 18px; line-height: 1; }
+  nav.bottom button .nav-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   nav.bottom button.active { color: #93c5fd; }
 
   /* modal */
@@ -181,8 +184,8 @@
 <header class="app-header">
   <h1>💰 Smart Finance Pro</h1>
   <div class="header-stats">
-    <div class="header-stat"><div class="lbl">Total Balance</div><div class="val" id="hdr-balance">$0.00</div></div>
-    <div class="header-stat"><div class="lbl">This Month</div><div class="val" id="hdr-month">$0.00</div></div>
+    <div class="header-stat"><div class="lbl">Total Balance</div><div class="val" id="hdr-balance">—</div></div>
+    <div class="header-stat"><div class="lbl">This Month</div><div class="val" id="hdr-month">—</div></div>
     <button class="setup-btn" id="btn-setup" type="button">⚙️ Setup</button>
   </div>
 </header>
@@ -194,20 +197,22 @@
   <section class="tab active" id="tab-dashboard">
     <h2 class="section-title">Overview</h2>
     <div class="metric-grid">
-      <div class="metric"><div class="lbl">Total Balance</div><div class="val" id="m-balance">$0.00</div></div>
-      <div class="metric"><div class="lbl">This Month Spending</div><div class="val" id="m-month">$0.00</div></div>
-      <div class="metric"><div class="lbl">Avg Daily Spend</div><div class="val" id="m-daily">$0.00</div></div>
-      <div class="metric"><div class="lbl">Installments Pending</div><div class="val" id="m-inst">$0.00</div></div>
+      <div class="metric"><div class="lbl">Total Balance</div><div class="val" id="m-balance">—</div></div>
+      <div class="metric"><div class="lbl">This Month Spending</div><div class="val" id="m-month">—</div></div>
+      <div class="metric"><div class="lbl">Avg Daily Spend</div><div class="val" id="m-daily">—</div></div>
+      <div class="metric"><div class="lbl">Installments Pending</div><div class="val" id="m-inst">—</div></div>
+      <div class="metric wide"><div class="lbl">Total Crypto Value</div><div class="val" id="m-crypto">—</div></div>
     </div>
 
     <h2 class="section-title">Spending by Category (this month)</h2>
     <div class="card">
       <div class="chart-wrap"><canvas id="spend-chart"></canvas></div>
       <div class="chart-legend" id="chart-legend"></div>
+      <div class="sub" id="chart-currency-note" style="margin-top:6px"></div>
       <div class="empty" id="chart-empty" style="display:none">No transactions this month yet.</div>
     </div>
 
-    <h2 class="section-title">Card Utilization</h2>
+    <h2 class="section-title">Cards</h2>
     <div id="dash-cards"></div>
 
     <h2 class="section-title">Active Installments</h2>
@@ -226,6 +231,7 @@
             <option>Savings</option><option>Checking</option><option>Investment</option>
           </select>
         </div>
+        <div class="field"><label for="bank-currency">Currency</label><select id="bank-currency"></select></div>
         <div class="field"><label for="bank-balance">Balance</label><input id="bank-balance" type="number" step="0.01" required placeholder="0.00"></div>
         <button class="btn" type="submit" id="bank-submit">Add Bank</button>
       </form>
@@ -236,7 +242,7 @@
 
   <!-- SPEND -->
   <section class="tab" id="tab-spend">
-    <h2 class="section-title">Log Transaction</h2>
+    <h2 class="section-title" id="txn-form-title">Log Transaction</h2>
     <div class="card">
       <form id="txn-form">
         <div class="field"><label for="txn-amount">Amount</label><input id="txn-amount" type="number" step="0.01" min="0.01" required placeholder="0.00"></div>
@@ -252,7 +258,12 @@
           <label for="txn-category-custom">Custom category</label>
           <input id="txn-category-custom" placeholder="e.g. School fees">
         </div>
-        <div class="field"><label for="txn-card">Card used</label><select id="txn-card" required></select></div>
+        <div class="field"><label for="txn-method">Payment method</label>
+          <select id="txn-method" required></select>
+        </div>
+        <div class="field" id="txn-currency-field" style="display:none">
+          <label for="txn-currency">Currency</label><select id="txn-currency"></select>
+        </div>
         <div class="field"><label for="txn-notes">Notes (optional)</label><input id="txn-notes" placeholder="Lunch at restaurant"></div>
         <div class="field">
           <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink)">
@@ -268,7 +279,10 @@
           </div>
           <div id="inst-preview"></div>
         </div>
-        <button class="btn" type="submit">Add Transaction</button>
+        <div class="actions">
+          <button class="btn" type="submit" id="txn-submit" style="flex:2">Add Transaction</button>
+          <button class="btn-sm" type="button" id="txn-cancel-edit" style="display:none;flex:1">Cancel</button>
+        </div>
       </form>
     </div>
     <h2 class="section-title">Recent Transactions</h2>
@@ -277,19 +291,42 @@
 
   <!-- CARDS -->
   <section class="tab" id="tab-cards">
-    <h2 class="section-title">Add Credit Card</h2>
+    <h2 class="section-title">Add Card</h2>
     <div class="card">
       <form id="card-form">
         <div class="field"><label for="card-name">Card name</label><input id="card-name" required placeholder="e.g. Emirates NBD Blue"></div>
-        <div class="field"><label for="card-bank">Bank</label><select id="card-bank" required></select></div>
-        <div class="field"><label for="card-limit">Credit limit</label><input id="card-limit" type="number" step="0.01" min="0.01" required placeholder="50000"></div>
+        <div class="field"><label for="card-type">Card type</label>
+          <select id="card-type"><option value="Credit">Credit Card</option><option value="Debit">Debit Card</option></select>
+        </div>
+        <div class="field"><label for="card-bank" id="card-bank-label">Bank (optional)</label>
+          <select id="card-bank"><option value="">No linked bank</option></select>
+        </div>
+        <div class="field" id="card-currency-field"><label for="card-currency">Currency</label><select id="card-currency"></select></div>
+        <div class="field" id="card-limit-field"><label for="card-limit">Credit limit</label><input id="card-limit" type="number" step="0.01" min="0.01" placeholder="50000"></div>
         <div class="field"><label for="card-balance">Current balance</label><input id="card-balance" type="number" step="0.01" value="0"></div>
-        <div class="field"><label for="card-rate">Annual interest rate %</label><input id="card-rate" type="number" step="0.1" min="0" value="0"></div>
+        <div class="field" id="card-rate-field"><label for="card-rate">Annual interest rate %</label><input id="card-rate" type="number" step="0.1" min="0" value="0"></div>
         <button class="btn" type="submit" id="card-submit">Add Card</button>
       </form>
     </div>
     <h2 class="section-title">Your Cards</h2>
     <div id="card-list"></div>
+  </section>
+
+  <!-- CRYPTO -->
+  <section class="tab" id="tab-crypto">
+    <h2 class="section-title">Add Crypto Holding</h2>
+    <div class="card">
+      <form id="crypto-form">
+        <div class="field"><label for="crypto-exchange">Exchange / platform</label><input id="crypto-exchange" required placeholder="e.g. Binance"></div>
+        <div class="field"><label for="crypto-coin">Coin / token symbol</label><input id="crypto-coin" required placeholder="e.g. BTC"></div>
+        <div class="field"><label for="crypto-amount">Amount held</label><input id="crypto-amount" type="number" step="any" min="0.00000001" required placeholder="0.05"></div>
+        <div class="field"><label for="crypto-value">Estimated value</label><input id="crypto-value" type="number" step="0.01" min="0" required placeholder="3200.00"></div>
+        <div class="field"><label for="crypto-currency">Currency</label><select id="crypto-currency"></select></div>
+        <button class="btn" type="submit" id="crypto-submit">Add Holding</button>
+      </form>
+    </div>
+    <h2 class="section-title">Your Crypto Holdings</h2>
+    <div id="crypto-list"></div>
   </section>
 
   <!-- ADVICE -->
@@ -311,19 +348,21 @@
 </main>
 
 <nav class="bottom">
-  <button data-tab="dashboard" class="active"><span class="ico">📊</span>Dashboard</button>
-  <button data-tab="banks"><span class="ico">🏦</span>Banks</button>
-  <button data-tab="spend"><span class="ico">💸</span>Spend</button>
-  <button data-tab="cards"><span class="ico">💳</span>Cards</button>
-  <button data-tab="advice"><span class="ico">🤖</span>Advice</button>
+  <button data-tab="dashboard" class="active"><span class="ico">📊</span><span class="nav-label">Dashboard</span></button>
+  <button data-tab="banks"><span class="ico">🏦</span><span class="nav-label">Banks</span></button>
+  <button data-tab="spend"><span class="ico">💸</span><span class="nav-label">Spend</span></button>
+  <button data-tab="cards"><span class="ico">💳</span><span class="nav-label">Cards</span></button>
+  <button data-tab="crypto"><span class="ico">🪙</span><span class="nav-label">Crypto</span></button>
+  <button data-tab="advice"><span class="ico">🤖</span><span class="nav-label">Advice</span></button>
 </nav>
 
 <!-- Setup modal -->
 <div class="modal-backdrop" id="setup-modal">
   <div class="modal">
-    <h3>⚙️ Setup — Claude API Key</h3>
-    <p>Your key is stored only in this browser's localStorage and sent directly to the Claude API. Keep it private.</p>
+    <h3>⚙️ Setup</h3>
+    <p>Your API key is stored only in this browser's localStorage and sent directly to the Claude API. Keep it private.</p>
     <div class="field"><label for="api-key-input">Claude API key</label><input id="api-key-input" type="password" placeholder="sk-ant-…"></div>
+    <div class="field"><label for="default-currency-input">Default currency</label><select id="default-currency-input"></select></div>
     <div class="actions">
       <button class="btn" id="btn-save-key" type="button" style="flex:2">Save</button>
       <button class="btn-sm" id="btn-close-modal" type="button" style="flex:1">Close</button>
@@ -356,7 +395,9 @@ const KEYS = {
   banks: 'smartfinance_banks',
   cards: 'smartfinance_cards',
   txns: 'smartfinance_transactions',
+  crypto: 'smartfinance_crypto',
   recos: 'smartfinance_recommendations',
+  settings: 'smartfinance_settings',
   apiKey: 'claude_api_key'
 };
 function load(key, fallback) {
@@ -368,9 +409,57 @@ function save(key, value) { localStorage.setItem(key, JSON.stringify(value)); }
 let banks = load(KEYS.banks, []);
 let cards = load(KEYS.cards, []);
 let txns  = load(KEYS.txns, []);
+let cryptoHoldings = load(KEYS.crypto, []);
 
-const CURRENCY = '$';
-const fmt = n => CURRENCY + (Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/* ---------- currency ---------- */
+const CURRENCIES = ['AED', 'USD', 'EUR', 'GBP', 'PKR', 'SAR', 'QAR', 'KWD', 'BHD', 'OMR', 'INR', 'JPY', 'CNY', 'CAD', 'AUD', 'CHF'];
+const CUR_SYMBOL = {
+  AED: 'AED ', USD: '$', EUR: '€', GBP: '£', PKR: 'PKR ', SAR: 'SAR ', QAR: 'QAR ', KWD: 'KWD ',
+  BHD: 'BHD ', OMR: 'OMR ', INR: '₹', JPY: '¥', CNY: '¥', CAD: 'CA$', AUD: 'A$', CHF: 'CHF '
+};
+function defaultCurrency() { return load(KEYS.settings, {}).currency || 'AED'; }
+function setDefaultCurrency(code) { const s = load(KEYS.settings, {}); s.currency = code; save(KEYS.settings, s); }
+function fmtCur(amount, code) {
+  code = code || defaultCurrency();
+  const sym = CUR_SYMBOL[code] || (code + ' ');
+  return sym + (Number(amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function currencyOptionsHTML(selected) {
+  return CURRENCIES.map(c => '<option value="' + c + '"' + (c === selected ? ' selected' : '') + '>' + c + '</option>').join('');
+}
+function populateCurrencySelects() {
+  const def = defaultCurrency();
+  ['default-currency-input', 'bank-currency', 'card-currency', 'txn-currency', 'crypto-currency'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = currencyOptionsHTML(el.value || def);
+  });
+}
+/* grouped totals — sums are only ever combined within the same currency,
+   never across currencies, so a mixed-currency total can't silently be wrong */
+function groupByCurrency(items, amountFn, currencyFn) {
+  const map = {};
+  for (const it of items) {
+    const cur = currencyFn(it) || defaultCurrency();
+    map[cur] = (map[cur] || 0) + amountFn(it);
+  }
+  return map;
+}
+function renderGroupedValue(map) {
+  const def = defaultCurrency();
+  const entries = Object.entries(map);
+  if (!entries.length) return { main: fmtCur(0, def), extra: [] };
+  entries.sort((a, b) => (a[0] === def ? -1 : b[0] === def ? 1 : a[0].localeCompare(b[0])));
+  return { main: fmtCur(entries[0][1], entries[0][0]), extra: entries.slice(1).map(([cur, amt]) => fmtCur(amt, cur)) };
+}
+function setMetric(elId, map) {
+  const { main, extra } = renderGroupedValue(map);
+  document.getElementById(elId).innerHTML = esc(main) + extra.map(e => '<div class="val-extra">+ ' + esc(e) + '</div>').join('');
+}
+function setHeaderMetric(elId, map) {
+  const { main, extra } = renderGroupedValue(map);
+  document.getElementById(elId).textContent = main + (extra.length ? ' +' + extra.length : '');
+}
+
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 /* categorical palette — validated (dataviz skill) for the dark slate surface */
@@ -383,24 +472,40 @@ function categoryColor(cat) {
 }
 
 /* ---------- derived values ---------- */
-function totalBankBalance() { return banks.reduce((s, b) => s + (Number(b.balance) || 0), 0); }
+function bankCurrency(b) { return b.currency || defaultCurrency(); }
+function cardCurrency(c) {
+  if (c.type === 'Debit' && c.bank) {
+    const b = banks.find(x => x.id === c.bank);
+    if (b) return bankCurrency(b);
+  }
+  return c.currency || defaultCurrency();
+}
+function txnCurrency(t) {
+  if (t.paymentMethod === 'cash') return t.currency || defaultCurrency();
+  const c = cardById(t.card);
+  return c ? cardCurrency(c) : defaultCurrency();
+}
 function isThisMonth(iso) {
   const d = new Date(iso), now = new Date();
   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
 }
 function monthTxns() { return txns.filter(t => isThisMonth(t.date)); }
-function monthSpending() { return monthTxns().reduce((s, t) => s + t.amount, 0); }
 function activeInstallments() {
   return txns.filter(t => t.installment && t.installment.paidMonths < t.installment.months)
              .map(t => ({ txn: t, inst: t.installment }));
 }
 function installmentRemaining(inst) { return inst.monthlyPayment * (inst.months - inst.paidMonths); }
-function totalInstallmentsPending() { return activeInstallments().reduce((s, a) => s + installmentRemaining(a.inst), 0); }
-function monthlyInstallmentObligation() { return activeInstallments().reduce((s, a) => s + a.inst.monthlyPayment, 0); }
+/* category totals only include the default-currency subset — mixing categories
+   priced in different currencies into one doughnut would misrepresent proportions */
 function categoryBreakdown() {
   const map = {};
-  for (const t of monthTxns()) map[t.category] = (map[t.category] || 0) + t.amount;
-  return map;
+  let otherCount = 0;
+  const def = defaultCurrency();
+  for (const t of monthTxns()) {
+    if (txnCurrency(t) !== def) { otherCount++; continue; }
+    map[t.category] = (map[t.category] || 0) + t.amount;
+  }
+  return { map, otherCount };
 }
 function bankName(id) { const b = banks.find(b => b.id === id); return b ? b.name : 'Unknown bank'; }
 function cardById(id) { return cards.find(c => c.id === id); }
@@ -409,10 +514,12 @@ function cardById(id) { return cards.find(c => c.id === id); }
 function renderAlerts() {
   const el = document.getElementById('alerts');
   const alerts = [];
-  const ms = monthSpending();
-  if (ms > 5000) alerts.push({ level: 'warn', text: '⚠️ High spending this month: ' + fmt(ms) });
+  const monthMap = groupByCurrency(monthTxns(), t => t.amount, txnCurrency);
+  for (const [cur, amt] of Object.entries(monthMap)) {
+    if (amt > 5000) alerts.push({ level: 'warn', text: '⚠️ High spending this month: ' + fmtCur(amt, cur) });
+  }
   for (const c of cards) {
-    if (c.limit > 0 && c.balance / c.limit > 0.9) {
+    if (c.type !== 'Debit' && c.limit > 0 && c.balance / c.limit > 0.9) {
       alerts.push({ level: 'crit', text: '🚨 Alert: ' + esc(c.name) + ' is at ' + Math.round(c.balance / c.limit * 100) + '% utilization — consider a payment' });
     }
   }
@@ -421,13 +528,21 @@ function renderAlerts() {
 
 /* ---------- header + metrics ---------- */
 function renderMetrics() {
-  const bal = totalBankBalance(), ms = monthSpending();
-  document.getElementById('hdr-balance').textContent = fmt(bal);
-  document.getElementById('hdr-month').textContent = fmt(ms);
-  document.getElementById('m-balance').textContent = fmt(bal);
-  document.getElementById('m-month').textContent = fmt(ms);
-  document.getElementById('m-daily').textContent = fmt(ms / 30);
-  document.getElementById('m-inst').textContent = fmt(totalInstallmentsPending());
+  const balMap = groupByCurrency(banks, b => Number(b.balance) || 0, bankCurrency);
+  const monthMap = groupByCurrency(monthTxns(), t => t.amount, txnCurrency);
+  const dailyMap = {};
+  for (const [cur, amt] of Object.entries(monthMap)) dailyMap[cur] = amt / 30;
+  const active = activeInstallments();
+  const instMap = groupByCurrency(active, a => installmentRemaining(a.inst), a => txnCurrency(a.txn));
+  const cryptoMap = groupByCurrency(cryptoHoldings, h => Number(h.value) || 0, h => h.currency || defaultCurrency());
+
+  setHeaderMetric('hdr-balance', balMap);
+  setHeaderMetric('hdr-month', monthMap);
+  setMetric('m-balance', balMap);
+  setMetric('m-month', monthMap);
+  setMetric('m-daily', dailyMap);
+  setMetric('m-inst', instMap);
+  setMetric('m-crypto', cryptoMap);
 }
 
 /* ---------- chart ---------- */
@@ -437,8 +552,13 @@ function renderChart() {
   const canvas = document.getElementById('spend-chart');
   const emptyEl = document.getElementById('chart-empty');
   const legendEl = document.getElementById('chart-legend');
-  const breakdown = categoryBreakdown();
+  const noteEl = document.getElementById('chart-currency-note');
+  const { map: breakdown, otherCount } = categoryBreakdown();
   const labels = Object.keys(breakdown);
+
+  noteEl.textContent = otherCount > 0
+    ? '+ ' + otherCount + ' transaction' + (otherCount > 1 ? 's' : '') + ' in other currencies not shown in this chart — see the list below.'
+    : '';
 
   /* the legend doubles as the table view — render it whenever there is data,
      even if Chart.js failed to load (offline first visit) */
@@ -446,7 +566,7 @@ function renderChart() {
     legendEl.innerHTML = labels.map(l =>
       '<button type="button" data-cat="' + esc(l) + '" class="' + (hiddenCategories.has(l) ? 'off' : '') + '">' +
       '<span class="cat-dot" style="background:' + categoryColor(l) + '"></span>' +
-      esc(l) + ' · ' + fmt(breakdown[l]) + '</button>').join('');
+      esc(l) + ' · ' + fmtCur(breakdown[l]) + '</button>').join('');
     legendEl.querySelectorAll('button').forEach(btn => {
       btn.addEventListener('click', () => {
         const cat = btn.dataset.cat;
@@ -495,7 +615,7 @@ function renderChart() {
           legend: { display: false },
           tooltip: {
             backgroundColor: '#273449', titleColor: '#f1f5f9', bodyColor: '#cbd5e1',
-            callbacks: { label: ctx => ' ' + ctx.label + ': ' + fmt(ctx.parsed) }
+            callbacks: { label: ctx => ' ' + ctx.label + ': ' + fmtCur(ctx.parsed) }
           }
         }
       }
@@ -513,8 +633,8 @@ function renderBanks() {
   else {
     el.innerHTML = banks.map(b =>
       '<div class="list-item"><div class="row"><span class="title">🏦 ' + esc(b.name) + '</span>' +
-      '<span class="title">' + fmt(b.balance) + '</span></div>' +
-      '<div class="sub">' + esc(b.type) + ' account</div>' +
+      '<span class="title">' + fmtCur(b.balance, bankCurrency(b)) + '</span></div>' +
+      '<div class="sub">' + esc(b.type) + ' account · ' + bankCurrency(b) + '</div>' +
       '<div class="actions"><button class="btn-sm" data-edit="' + b.id + '">Edit</button>' +
       '<button class="btn-sm danger" data-del="' + b.id + '">Delete</button></div></div>').join('');
   }
@@ -523,6 +643,7 @@ function renderBanks() {
     editingBankId = b.id;
     document.getElementById('bank-name').value = b.name;
     document.getElementById('bank-type').value = b.type;
+    document.getElementById('bank-currency').value = bankCurrency(b);
     document.getElementById('bank-balance').value = b.balance;
     document.getElementById('bank-submit').textContent = 'Save Changes';
     document.getElementById('bank-name').focus();
@@ -530,7 +651,7 @@ function renderBanks() {
   el.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', () => {
     const id = Number(btn.dataset.del);
     const b = banks.find(x => x.id === id); if (!b) return;
-    if (cards.some(c => c.bank === id)) { alert('This bank has credit cards linked to it. Delete those cards first.'); return; }
+    if (cards.some(c => c.bank === id)) { alert('This bank has cards linked to it. Delete or unlink those cards first.'); return; }
     if (!confirm('Delete bank "' + b.name + '"? This cannot be undone.')) return;
     banks = banks.filter(x => x.id !== id);
     save(KEYS.banks, banks);
@@ -538,22 +659,23 @@ function renderBanks() {
   }));
   /* card form bank dropdown */
   const sel = document.getElementById('card-bank');
-  sel.innerHTML = '<option value="">Select bank…</option>' +
-    banks.map(b => '<option value="' + b.id + '">' + esc(b.name) + '</option>').join('');
+  sel.innerHTML = '<option value="">No linked bank</option>' +
+    banks.map(b => '<option value="' + b.id + '">' + esc(b.name) + ' (' + bankCurrency(b) + ')</option>').join('');
 }
 document.getElementById('bank-form').addEventListener('submit', e => {
   e.preventDefault();
   const name = document.getElementById('bank-name').value.trim();
   const type = document.getElementById('bank-type').value;
+  const currency = document.getElementById('bank-currency').value || defaultCurrency();
   const balance = parseFloat(document.getElementById('bank-balance').value);
   if (!name || !type || isNaN(balance)) return;
   if (editingBankId) {
     const b = banks.find(x => x.id === editingBankId);
-    if (b) { b.name = name; b.type = type; b.balance = balance; }
+    if (b) { b.name = name; b.type = type; b.balance = balance; b.currency = currency; }
     editingBankId = null;
     document.getElementById('bank-submit').textContent = 'Add Bank';
   } else {
-    banks.push({ id: Date.now(), name, type, balance, currency: 'AED' });
+    banks.push({ id: Date.now(), name, type, balance, currency });
   }
   save(KEYS.banks, banks);
   e.target.reset();
@@ -563,30 +685,76 @@ document.getElementById('bank-form').addEventListener('submit', e => {
 /* ---------- cards ---------- */
 let editingCardId = null;
 function utilClass(u) { return u > 0.8 ? 'util-red' : u > 0.5 ? 'util-yellow' : 'util-green'; }
+function updateCardFormVisibility() {
+  const type = document.getElementById('card-type').value;
+  const bankSel = document.getElementById('card-bank');
+  const bankLabel = document.getElementById('card-bank-label');
+  const limitField = document.getElementById('card-limit-field');
+  const rateField = document.getElementById('card-rate-field');
+  const curField = document.getElementById('card-currency-field');
+  const limitInput = document.getElementById('card-limit');
+  if (type === 'Debit') {
+    bankSel.required = true;
+    bankLabel.textContent = 'Bank (required for debit cards)';
+    limitField.style.display = 'none';
+    rateField.style.display = 'none';
+    curField.style.display = 'none';
+    limitInput.required = false;
+  } else {
+    bankSel.required = false;
+    bankLabel.textContent = 'Bank (optional)';
+    limitField.style.display = '';
+    rateField.style.display = '';
+    curField.style.display = '';
+    limitInput.required = true;
+  }
+}
+document.getElementById('card-type').addEventListener('change', updateCardFormVisibility);
+
 function cardHTML(c, withActions) {
-  const util = c.limit > 0 ? c.balance / c.limit : 0;
-  const pct = Math.min(100, Math.round(util * 100));
-  return '<div class="list-item"><div class="row"><span class="title">💳 ' + esc(c.name) + '</span>' +
-    '<span class="title">' + fmt(c.balance) + '</span></div>' +
-    '<div class="sub">' + esc(bankName(c.bank)) + ' · limit ' + fmt(c.limit) + ' · ' + (Number(c.rate) || 0) + '% APR · ' + pct + '% used</div>' +
-    '<div class="util-bar ' + utilClass(util) + '"><div style="width:' + pct + '%"></div></div>' +
+  const cur = cardCurrency(c);
+  const isCredit = c.type !== 'Debit';
+  const bankLabel = c.bank ? esc(bankName(c.bank)) : 'No linked bank';
+  let body;
+  if (isCredit) {
+    const util = c.limit > 0 ? c.balance / c.limit : 0;
+    const pct = Math.min(100, Math.round(util * 100));
+    body = '<div class="sub">' + bankLabel + ' · limit ' + fmtCur(c.limit, cur) + ' · ' + (Number(c.rate) || 0) + '% APR · ' + pct + '% used</div>' +
+      '<div class="util-bar ' + utilClass(util) + '"><div style="width:' + pct + '%"></div></div>';
+  } else {
+    body = '<div class="sub">' + bankLabel + ' · Debit card</div>';
+  }
+  return '<div class="list-item"><div class="row"><span class="title">' + (isCredit ? '💳' : '🏧') + ' ' + esc(c.name) +
+    ' <span class="badge">' + (isCredit ? 'Credit' : 'Debit') + '</span></span>' +
+    '<span class="title">' + fmtCur(c.balance, cur) + '</span></div>' + body +
     (withActions
       ? '<div class="actions"><button class="btn-sm" data-edit="' + c.id + '">Edit</button>' +
         '<button class="btn-sm danger" data-del="' + c.id + '">Delete</button></div>'
       : '') + '</div>';
 }
+function renderPaymentMethodOptions() {
+  const sel = document.getElementById('txn-method');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Select payment method…</option>' +
+    '<option value="cash">💵 Cash</option>' +
+    cards.map(c => '<option value="card:' + c.id + '">' + (c.type === 'Debit' ? '🏧' : '💳') + ' ' + esc(c.name) + ' (' + (c.type || 'Credit') + ')</option>').join('');
+  if ([...sel.options].some(o => o.value === current)) sel.value = current;
+}
 function renderCards() {
   const el = document.getElementById('card-list');
   el.innerHTML = cards.length ? cards.map(c => cardHTML(c, true)).join('')
-    : '<div class="empty">No cards yet. Add a bank first, then create a card.</div>';
+    : '<div class="empty">No cards yet.</div>';
   el.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', () => {
     const c = cardById(Number(btn.dataset.edit)); if (!c) return;
     editingCardId = c.id;
     document.getElementById('card-name').value = c.name;
-    document.getElementById('card-bank').value = c.bank;
+    document.getElementById('card-type').value = c.type || 'Credit';
+    updateCardFormVisibility();
+    document.getElementById('card-bank').value = c.bank || '';
     document.getElementById('card-limit').value = c.limit;
     document.getElementById('card-balance').value = c.balance;
     document.getElementById('card-rate').value = c.rate;
+    document.getElementById('card-currency').value = c.currency || defaultCurrency();
     document.getElementById('card-submit').textContent = 'Save Changes';
     document.getElementById('card-name').focus();
   }));
@@ -600,45 +768,57 @@ function renderCards() {
     save(KEYS.cards, cards);
     refreshAll();
   }));
-  /* dashboard utilization + txn form dropdown */
+  /* dashboard cards + txn form payment method dropdown */
   document.getElementById('dash-cards').innerHTML = cards.length
     ? cards.map(c => cardHTML(c, false)).join('')
     : '<div class="empty">No cards yet.</div>';
-  const sel = document.getElementById('txn-card');
-  sel.innerHTML = '<option value="">Select card…</option>' +
-    cards.map(c => '<option value="' + c.id + '">' + esc(c.name) + '</option>').join('');
+  renderPaymentMethodOptions();
 }
 document.getElementById('card-form').addEventListener('submit', e => {
   e.preventDefault();
   const name = document.getElementById('card-name').value.trim();
-  const bank = Number(document.getElementById('card-bank').value);
-  const limit = parseFloat(document.getElementById('card-limit').value);
+  const type = document.getElementById('card-type').value === 'Debit' ? 'Debit' : 'Credit';
+  const bankVal = document.getElementById('card-bank').value;
+  const bank = bankVal ? Number(bankVal) : null;
+  if (!name) { alert('Card name is required.'); return; }
+  if (type === 'Debit' && !bank) { alert('Debit cards must be linked to a bank account.'); return; }
+  let limit = 0, rate = 0, currency;
+  if (type === 'Credit') {
+    limit = parseFloat(document.getElementById('card-limit').value);
+    if (!(limit > 0)) { alert('Credit cards need a limit greater than 0.'); return; }
+    rate = parseFloat(document.getElementById('card-rate').value) || 0;
+    currency = document.getElementById('card-currency').value || defaultCurrency();
+  } else {
+    const b = banks.find(x => x.id === bank);
+    currency = b ? bankCurrency(b) : defaultCurrency();
+  }
   const balance = parseFloat(document.getElementById('card-balance').value) || 0;
-  const rate = parseFloat(document.getElementById('card-rate').value) || 0;
-  if (!name || !bank || !(limit > 0)) { alert('Card name, bank and a limit greater than 0 are required.'); return; }
   if (editingCardId) {
     const c = cardById(editingCardId);
-    if (c) { c.name = name; c.bank = bank; c.limit = limit; c.balance = balance; c.rate = rate; }
+    if (c) { c.name = name; c.type = type; c.bank = bank; c.limit = limit; c.balance = balance; c.rate = rate; c.currency = currency; }
     editingCardId = null;
     document.getElementById('card-submit').textContent = 'Add Card';
   } else {
-    cards.push({ id: Date.now(), name, bank, limit, balance, rate, currency: 'AED' });
+    cards.push({ id: Date.now(), name, type, bank, limit, balance, rate, currency });
   }
   save(KEYS.cards, cards);
   e.target.reset();
   document.getElementById('card-balance').value = 0;
   document.getElementById('card-rate').value = 0;
+  document.getElementById('card-type').value = 'Credit';
+  updateCardFormVisibility();
   refreshAll();
 });
 
 /* ---------- transactions ---------- */
+let editingTxnId = null;
 function computeMonthly(amount, rate, months) { return amount * (1 + rate / 100) / months; }
 function updateInstPreview() {
   const amount = parseFloat(document.getElementById('txn-amount').value) || 0;
   const months = Number(document.getElementById('inst-months').value);
   const rate = parseFloat(document.getElementById('inst-rate').value) || 0;
   document.getElementById('inst-preview').textContent = amount > 0
-    ? '📅 ' + months + ' months · ' + fmt(computeMonthly(amount, rate, months)) + '/mo'
+    ? '📅 ' + months + ' months · ' + fmtCur(computeMonthly(amount, rate, months)) + '/mo'
     : '';
 }
 document.getElementById('txn-inst').addEventListener('change', e => {
@@ -650,6 +830,21 @@ document.getElementById('txn-inst').addEventListener('change', e => {
 document.getElementById('txn-category').addEventListener('change', e => {
   document.getElementById('custom-cat-field').style.display = e.target.value === '__custom' ? '' : 'none';
 });
+document.getElementById('txn-method').addEventListener('change', e => {
+  document.getElementById('txn-currency-field').style.display = e.target.value === 'cash' ? '' : 'none';
+});
+
+function resetTxnForm() {
+  editingTxnId = null;
+  document.getElementById('txn-form').reset();
+  document.getElementById('inst-fields').classList.remove('show');
+  document.getElementById('custom-cat-field').style.display = 'none';
+  document.getElementById('txn-currency-field').style.display = 'none';
+  document.getElementById('txn-form-title').textContent = 'Log Transaction';
+  document.getElementById('txn-submit').textContent = 'Add Transaction';
+  document.getElementById('txn-cancel-edit').style.display = 'none';
+}
+document.getElementById('txn-cancel-edit').addEventListener('click', resetTxnForm);
 
 document.getElementById('txn-form').addEventListener('submit', e => {
   e.preventDefault();
@@ -660,63 +855,148 @@ document.getElementById('txn-form').addEventListener('submit', e => {
     category = document.getElementById('txn-category-custom').value.trim();
     if (!category) { alert('Enter a custom category name.'); return; }
   }
-  const cardId = Number(document.getElementById('txn-card').value);
-  const card = cardById(cardId);
-  if (!card) { alert('Select the card used for this payment.'); return; }
+  const methodVal = document.getElementById('txn-method').value;
+  if (!methodVal) { alert('Select a payment method — Cash or a card.'); return; }
+  const isCash = methodVal === 'cash';
+  const newCardId = isCash ? null : Number(methodVal.split(':')[1]);
+  const newCard = isCash ? null : cardById(newCardId);
+  if (!isCash && !newCard) { alert('Selected card no longer exists.'); return; }
+  const cashCurrency = isCash ? (document.getElementById('txn-currency').value || defaultCurrency()) : undefined;
   const notes = document.getElementById('txn-notes').value.trim();
 
-  let installment = null;
+  let instFields = null;
   if (document.getElementById('txn-inst').checked) {
     const months = Number(document.getElementById('inst-months').value);
     const rate = parseFloat(document.getElementById('inst-rate').value);
     if (!months || isNaN(rate) || rate < 0) { alert('Installment months and a rate of 0 or more are required.'); return; }
-    const now = new Date();
-    const due = new Date(now); due.setMonth(due.getMonth() + 1);
-    installment = {
-      id: Date.now() + 1,
-      amount, months, rate,
-      monthlyPayment: computeMonthly(amount, rate, months),
-      paidMonths: 0,
-      startDate: now.toISOString(),
-      dueDate: due.toISOString()
-    };
+    instFields = { amount, months, rate, monthlyPayment: computeMonthly(amount, rate, months) };
   }
-  const txn = { id: Date.now(), amount, category, card: cardId, notes, date: new Date().toISOString(), installment };
-  if (installment) installment.parentTransactionId = txn.id;
-  txns.unshift(txn);
-  card.balance += amount;   /* card balance updates immediately */
+
+  if (editingTxnId) {
+    const t = txns.find(x => x.id === editingTxnId);
+    if (!t) { resetTxnForm(); return; }
+    /* reverse the original card contribution, then apply the new one —
+       covers amount edits, payment-method changes, and cash<->card switches */
+    if (t.paymentMethod === 'card') {
+      const oldCard = cardById(t.card);
+      if (oldCard) oldCard.balance -= t.amount;
+    }
+    if (!isCash) newCard.balance += amount;
+
+    if (instFields) {
+      if (t.installment) {
+        /* editing an existing plan — preserve progress, clamp if months shrank */
+        instFields.id = t.installment.id;
+        instFields.startDate = t.installment.startDate;
+        instFields.dueDate = t.installment.dueDate;
+        instFields.paidMonths = Math.min(t.installment.paidMonths, instFields.months);
+      } else {
+        /* converting a plain transaction to an installment after the fact */
+        const now = new Date(); const due = new Date(now); due.setMonth(due.getMonth() + 1);
+        instFields.id = Date.now() + 1;
+        instFields.paidMonths = 0;
+        instFields.startDate = now.toISOString();
+        instFields.dueDate = due.toISOString();
+      }
+      instFields.parentTransactionId = t.id;
+    }
+    /* vice versa: unchecking the box clears installment, back to a plain transaction */
+    t.amount = amount;
+    t.category = category;
+    t.paymentMethod = isCash ? 'cash' : 'card';
+    t.card = isCash ? null : newCardId;
+    t.currency = isCash ? cashCurrency : undefined;
+    t.notes = notes;
+    t.installment = instFields;
+  } else {
+    let installment = null;
+    if (instFields) {
+      const now = new Date(); const due = new Date(now); due.setMonth(due.getMonth() + 1);
+      installment = Object.assign(instFields, { id: Date.now() + 1, paidMonths: 0, startDate: now.toISOString(), dueDate: due.toISOString() });
+    }
+    const txn = {
+      id: Date.now(), amount, category,
+      paymentMethod: isCash ? 'cash' : 'card',
+      card: isCash ? null : newCardId,
+      currency: isCash ? cashCurrency : undefined,
+      notes, date: new Date().toISOString(), installment
+    };
+    if (installment) installment.parentTransactionId = txn.id;
+    txns.unshift(txn);
+    if (!isCash) newCard.balance += amount;
+  }
   save(KEYS.txns, txns);
   save(KEYS.cards, cards);
-  e.target.reset();
-  document.getElementById('inst-fields').classList.remove('show');
-  document.getElementById('custom-cat-field').style.display = 'none';
+  resetTxnForm();
   refreshAll();
 });
+
+function startEditTxn(id) {
+  const t = txns.find(x => x.id === id); if (!t) return;
+  editingTxnId = id;
+  document.getElementById('txn-amount').value = t.amount;
+  const known = CATEGORIES.includes(t.category);
+  document.getElementById('txn-category').value = known ? t.category : '__custom';
+  document.getElementById('custom-cat-field').style.display = known ? 'none' : '';
+  if (!known) document.getElementById('txn-category-custom').value = t.category;
+  renderPaymentMethodOptions();
+  document.getElementById('txn-method').value = t.paymentMethod === 'cash' ? 'cash' : ('card:' + t.card);
+  const isCash = t.paymentMethod === 'cash';
+  document.getElementById('txn-currency-field').style.display = isCash ? '' : 'none';
+  if (isCash) document.getElementById('txn-currency').value = t.currency || defaultCurrency();
+  document.getElementById('txn-notes').value = t.notes || '';
+  const instCheck = document.getElementById('txn-inst');
+  instCheck.checked = !!t.installment;
+  document.getElementById('inst-fields').classList.toggle('show', !!t.installment);
+  if (t.installment) {
+    document.getElementById('inst-months').value = t.installment.months;
+    document.getElementById('inst-rate').value = t.installment.rate;
+  }
+  updateInstPreview();
+  document.getElementById('txn-form-title').textContent = 'Edit Transaction';
+  document.getElementById('txn-submit').textContent = 'Save Changes';
+  document.getElementById('txn-cancel-edit').style.display = '';
+  document.querySelectorAll('nav.bottom button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(tb => tb.classList.remove('active'));
+  document.querySelector('nav.bottom button[data-tab="spend"]').classList.add('active');
+  document.getElementById('tab-spend').classList.add('active');
+  window.scrollTo(0, 0);
+  document.getElementById('txn-amount').focus();
+}
 
 function renderTxns() {
   const el = document.getElementById('txn-list');
   const recent = txns.slice(0, 30);
   if (!recent.length) { el.innerHTML = '<div class="empty">No transactions yet.</div>'; return; }
   el.innerHTML = recent.map(t => {
-    const card = cardById(t.card);
+    const cur = txnCurrency(t);
+    let methodLabel;
+    if (t.paymentMethod === 'cash') methodLabel = '💵 Cash';
+    else { const c = cardById(t.card); methodLabel = c ? ((c.type === 'Debit' ? '🏧 ' : '💳 ') + esc(c.name)) : '💳 Deleted card'; }
     const instBadge = t.installment
-      ? '<div class="badge">📅 ' + t.installment.months + ' months · ' + fmt(t.installment.monthlyPayment) + '/mo</div>' : '';
+      ? '<div class="badge">📅 ' + t.installment.months + ' months · ' + fmtCur(t.installment.monthlyPayment, cur) + '/mo</div>' : '';
     return '<div class="list-item"><div class="row">' +
       '<span><span class="cat-dot" style="background:' + categoryColor(t.category) + '"></span>' +
       '<span class="title">' + esc(t.category) + '</span></span>' +
-      '<span class="amount-neg">−' + fmt(t.amount) + '</span></div>' +
-      '<div class="sub">' + new Date(t.date).toLocaleDateString() + ' · ' + esc(card ? card.name : 'Deleted card') +
+      '<span class="amount-neg">−' + fmtCur(t.amount, cur) + '</span></div>' +
+      '<div class="sub">' + new Date(t.date).toLocaleDateString() + ' · ' + methodLabel +
       (t.notes ? ' · ' + esc(t.notes) : '') + '</div>' + instBadge +
-      '<div class="actions"><button class="btn-sm danger" data-del="' + t.id + '">Delete</button></div></div>';
+      '<div class="actions"><button class="btn-sm" data-edit="' + t.id + '">Edit</button>' +
+      '<button class="btn-sm danger" data-del="' + t.id + '">Delete</button></div></div>';
   }).join('');
+  el.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', () => startEditTxn(Number(btn.dataset.edit))));
   el.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', () => {
     const id = Number(btn.dataset.del);
     const t = txns.find(x => x.id === id); if (!t) return;
-    if (!confirm('Delete this ' + fmt(t.amount) + ' ' + t.category + ' transaction? The card balance will be reduced.')) return;
-    const card = cardById(t.card);
-    if (card) { card.balance -= t.amount; save(KEYS.cards, cards); }
+    const isCash = t.paymentMethod === 'cash';
+    if (!confirm('Delete this ' + fmtCur(t.amount, txnCurrency(t)) + ' ' + t.category + ' transaction?' + (isCash ? '' : ' The card balance will be reduced.'))) return;
+    if (!isCash) {
+      const card = cardById(t.card);
+      if (card) { card.balance -= t.amount; save(KEYS.cards, cards); }
+    }
     txns = txns.filter(x => x.id !== id);
     save(KEYS.txns, txns);
+    if (editingTxnId === id) resetTxnForm();
     refreshAll();
   }));
 }
@@ -726,14 +1006,16 @@ function renderInstallments() {
   const active = activeInstallments();
   if (!active.length) { el.innerHTML = '<div class="empty">No active installments.</div>'; return; }
   el.innerHTML = active.map(({ txn, inst }) => {
+    const cur = txnCurrency(txn);
     const remainingMonths = inst.months - inst.paidMonths;
     const pct = Math.round(inst.paidMonths / inst.months * 100);
     return '<div class="list-item"><div class="row">' +
       '<span class="title">📅 ' + esc(txn.category) + (txn.notes ? ' — ' + esc(txn.notes) : '') + '</span>' +
-      '<span class="title">' + fmt(inst.monthlyPayment) + '/mo</span></div>' +
-      '<div class="sub">' + remainingMonths + ' of ' + inst.months + ' months left · remaining ' + fmt(installmentRemaining(inst)) + '</div>' +
+      '<span class="title">' + fmtCur(inst.monthlyPayment, cur) + '/mo</span></div>' +
+      '<div class="sub">' + remainingMonths + ' of ' + inst.months + ' months left · remaining ' + fmtCur(installmentRemaining(inst), cur) + '</div>' +
       '<div class="util-bar util-green"><div style="width:' + pct + '%"></div></div>' +
-      '<div class="actions"><button class="btn-sm" data-pay="' + txn.id + '">Mark month paid</button></div></div>';
+      '<div class="actions"><button class="btn-sm" data-pay="' + txn.id + '">Mark month paid</button>' +
+      '<button class="btn-sm" data-edit="' + txn.id + '">Edit</button></div></div>';
   }).join('');
   el.querySelectorAll('[data-pay]').forEach(btn => btn.addEventListener('click', () => {
     const t = txns.find(x => x.id === Number(btn.dataset.pay));
@@ -743,7 +1025,69 @@ function renderInstallments() {
       refreshAll();
     }
   }));
+  el.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', () => startEditTxn(Number(btn.dataset.edit))));
 }
+
+/* ---------- crypto ---------- */
+let editingCryptoId = null;
+function renderCrypto() {
+  const el = document.getElementById('crypto-list');
+  if (!cryptoHoldings.length) { el.innerHTML = '<div class="empty">No crypto holdings yet. Add one above.</div>'; return; }
+  const byExchange = {};
+  for (const h of cryptoHoldings) (byExchange[h.exchange] = byExchange[h.exchange] || []).push(h);
+  el.innerHTML = Object.entries(byExchange).map(([ex, holdings]) => {
+    const rows = holdings.map(h =>
+      '<div class="row" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">' +
+      '<span>' + esc(h.coin) + ' · ' + (Number(h.amount) || 0) + '</span>' +
+      '<span class="title">' + fmtCur(h.value, h.currency) + '</span></div>' +
+      '<div class="actions" style="margin-top:4px"><button class="btn-sm" data-edit="' + h.id + '">Edit</button>' +
+      '<button class="btn-sm danger" data-del="' + h.id + '">Delete</button></div>'
+    ).join('');
+    return '<div class="list-item"><div class="title">🪙 ' + esc(ex) + '</div>' + rows + '</div>';
+  }).join('');
+  el.querySelectorAll('[data-edit]').forEach(btn => btn.addEventListener('click', () => {
+    const h = cryptoHoldings.find(x => x.id === Number(btn.dataset.edit)); if (!h) return;
+    editingCryptoId = h.id;
+    document.getElementById('crypto-exchange').value = h.exchange;
+    document.getElementById('crypto-coin').value = h.coin;
+    document.getElementById('crypto-amount').value = h.amount;
+    document.getElementById('crypto-value').value = h.value;
+    document.getElementById('crypto-currency').value = h.currency || defaultCurrency();
+    document.getElementById('crypto-submit').textContent = 'Save Changes';
+    document.getElementById('crypto-exchange').focus();
+  }));
+  el.querySelectorAll('[data-del]').forEach(btn => btn.addEventListener('click', () => {
+    const id = Number(btn.dataset.del);
+    const h = cryptoHoldings.find(x => x.id === id); if (!h) return;
+    if (!confirm('Delete ' + h.coin + ' holding on ' + h.exchange + '?')) return;
+    cryptoHoldings = cryptoHoldings.filter(x => x.id !== id);
+    save(KEYS.crypto, cryptoHoldings);
+    refreshAll();
+  }));
+}
+document.getElementById('crypto-form').addEventListener('submit', e => {
+  e.preventDefault();
+  const exchange = document.getElementById('crypto-exchange').value.trim();
+  const coin = document.getElementById('crypto-coin').value.trim().toUpperCase();
+  const amount = parseFloat(document.getElementById('crypto-amount').value);
+  const value = parseFloat(document.getElementById('crypto-value').value);
+  const currency = document.getElementById('crypto-currency').value || defaultCurrency();
+  if (!exchange || !coin || !(amount > 0) || isNaN(value) || value < 0) {
+    alert('Exchange, coin symbol, an amount greater than 0, and a value of 0 or more are required.');
+    return;
+  }
+  if (editingCryptoId) {
+    const h = cryptoHoldings.find(x => x.id === editingCryptoId);
+    if (h) { h.exchange = exchange; h.coin = coin; h.amount = amount; h.value = value; h.currency = currency; }
+    editingCryptoId = null;
+    document.getElementById('crypto-submit').textContent = 'Add Holding';
+  } else {
+    cryptoHoldings.push({ id: Date.now(), exchange, coin, amount, value, currency });
+  }
+  save(KEYS.crypto, cryptoHoldings);
+  e.target.reset();
+  refreshAll();
+});
 
 /* ---------- AI advice ---------- */
 function getApiKey() { return localStorage.getItem(KEYS.apiKey) || ''; }
@@ -756,18 +1100,27 @@ function renderApiStatus() {
   }
 }
 function buildContext() {
-  const breakdown = categoryBreakdown();
-  const catLines = Object.entries(breakdown).map(([c, v]) => c + ': ' + fmt(v)).join(', ') || 'none';
-  const cardLines = cards.map(c =>
-    c.name + ' (balance ' + fmt(c.balance) + ' of ' + fmt(c.limit) + ' limit, ' +
-    (c.limit > 0 ? Math.round(c.balance / c.limit * 100) : 0) + '% utilization, ' + (Number(c.rate) || 0) + '% APR)').join('; ') || 'none';
+  const { map: catMap } = categoryBreakdown();
+  const catLines = Object.entries(catMap).map(([c, v]) => c + ': ' + fmtCur(v)).join(', ') || 'none';
+  const cardLines = cards.map(c => {
+    const cur = cardCurrency(c);
+    if (c.type === 'Debit') return c.name + ' (Debit, ' + (c.bank ? bankName(c.bank) : 'no linked bank') + ', balance ' + fmtCur(c.balance, cur) + ')';
+    return c.name + ' (Credit, ' + (c.bank ? bankName(c.bank) : 'no linked bank') + ', balance ' + fmtCur(c.balance, cur) + ' of ' + fmtCur(c.limit, cur) + ' limit, ' +
+      (c.limit > 0 ? Math.round(c.balance / c.limit * 100) : 0) + '% utilization, ' + (Number(c.rate) || 0) + '% APR)';
+  }).join('; ') || 'none';
   const active = activeInstallments();
-  return 'User spending data — Total bank balance: ' + fmt(totalBankBalance()) +
-    '. This month spent: ' + fmt(monthSpending()) +
-    '. By category: ' + catLines +
-    '. Credit cards (' + cards.length + '): ' + cardLines +
-    '. Active installments: ' + active.length +
-    ' totaling ' + fmt(totalInstallmentsPending()) + ' outstanding, monthly obligation ' + fmt(monthlyInstallmentObligation()) + '.';
+  const fmtMap = m => Object.entries(m).map(([c, v]) => fmtCur(v, c)).join(', ') || 'none';
+  const balMap = groupByCurrency(banks, b => Number(b.balance) || 0, bankCurrency);
+  const monthMap = groupByCurrency(monthTxns(), t => t.amount, txnCurrency);
+  const instMap = groupByCurrency(active, a => installmentRemaining(a.inst), a => txnCurrency(a.txn));
+  const oblMap = groupByCurrency(active, a => a.inst.monthlyPayment, a => txnCurrency(a.txn));
+  const cryptoMap = groupByCurrency(cryptoHoldings, h => Number(h.value) || 0, h => h.currency || defaultCurrency());
+  return 'User spending data — Total bank balance: ' + fmtMap(balMap) +
+    '. This month spent: ' + fmtMap(monthMap) +
+    '. By category (in ' + defaultCurrency() + '): ' + catLines +
+    '. Cards (' + cards.length + '): ' + cardLines +
+    '. Active installments: ' + active.length + ' totaling ' + fmtMap(instMap) + ' outstanding, monthly obligation ' + fmtMap(oblMap) +
+    '. Crypto holdings (' + cryptoHoldings.length + '): total value ' + fmtMap(cryptoMap) + '.';
 }
 async function getAdvice() {
   const key = getApiKey();
@@ -820,19 +1173,23 @@ function renderRecommendations() {
   const el = document.getElementById('reco-list');
   const recos = [];
   for (const c of cards) {
-    if (c.limit > 0 && c.balance / c.limit > 0.8) {
+    if (c.type !== 'Debit' && c.limit > 0 && c.balance / c.limit > 0.8) {
       recos.push('Your card ' + c.name + ' is at ' + Math.round(c.balance / c.limit * 100) + '% utilization — consider paying it down.');
     }
   }
-  const ms = monthSpending();
-  if (ms > 5000) {
-    const breakdown = categoryBreakdown();
-    const top = Object.entries(breakdown).sort((a, b) => b[1] - a[1])[0];
-    recos.push('You spent ' + fmt(ms) + ' this month.' + (top ? ' Try reducing ' + top[0] + ' (' + fmt(top[1]) + ').' : ''));
+  const monthMap = groupByCurrency(monthTxns(), t => t.amount, txnCurrency);
+  const { map: catMap } = categoryBreakdown();
+  for (const [cur, amt] of Object.entries(monthMap)) {
+    if (amt > 5000) {
+      const top = Object.entries(catMap).sort((a, b) => b[1] - a[1])[0];
+      recos.push('You spent ' + fmtCur(amt, cur) + ' this month.' + (top ? ' Try reducing ' + top[0] + ' (' + fmtCur(top[1], defaultCurrency()) + ').' : ''));
+    }
   }
-  const pending = totalInstallmentsPending();
-  if (pending > 0) {
-    recos.push('You have ' + fmt(pending) + ' in active installments. Monthly obligation: ' + fmt(monthlyInstallmentObligation()) + '.');
+  const active = activeInstallments();
+  const instMap = groupByCurrency(active, a => installmentRemaining(a.inst), a => txnCurrency(a.txn));
+  const oblMap = groupByCurrency(active, a => a.inst.monthlyPayment, a => txnCurrency(a.txn));
+  for (const [cur, amt] of Object.entries(instMap)) {
+    if (amt > 0) recos.push('You have ' + fmtCur(amt, cur) + ' in active installments. Monthly obligation: ' + fmtCur(oblMap[cur] || 0, cur) + '.');
   }
   save(KEYS.recos, recos);
   el.innerHTML = recos.length
@@ -844,6 +1201,7 @@ function renderRecommendations() {
 const modal = document.getElementById('setup-modal');
 document.getElementById('btn-setup').addEventListener('click', () => {
   document.getElementById('api-key-input').value = getApiKey();
+  document.getElementById('default-currency-input').value = defaultCurrency();
   modal.classList.add('show');
   renderApiStatus();
 });
@@ -852,6 +1210,10 @@ modal.addEventListener('click', e => { if (e.target === modal) modal.classList.r
 document.getElementById('btn-save-key').addEventListener('click', () => {
   localStorage.setItem(KEYS.apiKey, document.getElementById('api-key-input').value.trim());
   renderApiStatus();
+});
+document.getElementById('default-currency-input').addEventListener('change', e => {
+  setDefaultCurrency(e.target.value);
+  refreshAll();
 });
 
 /* ---------- navigation ---------- */
@@ -868,16 +1230,19 @@ document.querySelectorAll('nav.bottom button').forEach(btn => {
 
 /* ---------- refresh ---------- */
 function refreshAll() {
+  populateCurrencySelects();
   renderMetrics();
   renderAlerts();
   renderBanks();
   renderCards();
   renderTxns();
   renderInstallments();
+  renderCrypto();
   renderChart();
   renderRecommendations();
   renderApiStatus();
 }
+updateCardFormVisibility();
 refreshAll();
 </script>
 </body>
