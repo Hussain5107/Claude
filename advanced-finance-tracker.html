@@ -6,6 +6,13 @@
 <meta name="theme-color" content="#0f172a">
 <title>Smart Finance Pro</title>
 <link rel="manifest" id="manifest-placeholder">
+<!-- iOS Safari ignores the web manifest for "Add to Home Screen" — it needs its own tags -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FinancePro">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="apple-touch-icon" id="apple-touch-icon-placeholder">
+<link rel="icon" id="favicon-placeholder">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
   :root {
@@ -315,6 +322,7 @@
   <h1>💰 Smart Finance Pro</h1>
   <div class="header-stats">
     <div class="header-stat"><div class="lbl">Net Worth</div><div class="val" id="hdr-networth">—</div></div>
+    <button class="setup-btn" id="btn-install-header" type="button" style="display:none" title="Install as app">📲</button>
     <button class="setup-btn" id="btn-setup" type="button">⚙️</button>
   </div>
 </header>
@@ -815,6 +823,12 @@
 
   <!-- ================= TOOLS ================= -->
   <section class="tab" id="page-tools">
+    <h2 class="section-title">📲 Install App</h2>
+    <div class="card">
+      <div id="install-status"></div>
+      <button class="btn" id="btn-install-tools" type="button" style="display:none;margin-top:10px">📲 Install Smart Finance Pro</button>
+    </div>
+
     <h2 class="section-title">Claude API</h2>
     <div class="card">
       <div class="field"><label for="api-key-input">Claude API key (stored only in this browser)</label><input id="api-key-input" type="password" placeholder="sk-ant-…"></div>
@@ -916,19 +930,86 @@
 
 /* ---------- PWA manifest (inline, no extra files) ---------- */
 (function () {
+  /* one icon shape for normal use (rounded, full-bleed), one "maskable" shape
+     (square, art kept inside the ~80% safe zone) so Android's adaptive-icon
+     mask never clips the emoji — both are plain SVG data URIs, no image files */
+  function pwaIcon(maskable) {
+    const bg = maskable ? '<rect width="100" height="100" fill="#1e40af"/>' : '<rect width="100" height="100" rx="20" fill="#1e40af"/>';
+    const fontSize = maskable ? 40 : 52, y = maskable ? 62 : 66;
+    return 'data:image/svg+xml,' + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' + bg +
+      '<text x="50" y="' + y + '" font-size="' + fontSize + '" text-anchor="middle">💰</text></svg>');
+  }
+  const iconAny = pwaIcon(false), iconMaskable = pwaIcon(true);
+  /* absolute start_url/scope — a relative "." can fail to resolve correctly
+     against a blob: manifest URL, and this must be right for the installed
+     icon to relaunch the same file */
+  const here = location.href.split('#')[0];
   const manifest = {
     name: 'Smart Finance Pro', short_name: 'FinancePro',
-    start_url: '.', display: 'standalone',
+    description: 'Multi-bank, multi-currency personal finance manager with budgets, investments, and an AI advisor.',
+    start_url: here, scope: here, id: here,
+    display: 'standalone', orientation: 'portrait-primary',
     background_color: '#0f172a', theme_color: '#1e40af',
-    icons: [{
-      src: 'data:image/svg+xml,' + encodeURIComponent(
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="#1e40af"/><text x="50" y="66" font-size="52" text-anchor="middle">💰</text></svg>'),
-      sizes: 'any', type: 'image/svg+xml'
-    }]
+    categories: ['finance', 'productivity'],
+    icons: [
+      { src: iconAny, sizes: '192x192', type: 'image/svg+xml', purpose: 'any' },
+      { src: iconAny, sizes: '512x512', type: 'image/svg+xml', purpose: 'any' },
+      { src: iconMaskable, sizes: '512x512', type: 'image/svg+xml', purpose: 'maskable' }
+    ]
   };
   const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
   document.getElementById('manifest-placeholder').setAttribute('href', URL.createObjectURL(blob));
+  document.getElementById('apple-touch-icon-placeholder').setAttribute('href', iconMaskable);
+  document.getElementById('favicon-placeholder').setAttribute('href', iconAny);
 })();
+
+/* ---------- PWA install prompt ---------- */
+let deferredInstallPrompt = null;
+function isStandalone() {
+  return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+}
+function platformHint() {
+  const ua = navigator.userAgent;
+  if (/iPhone|iPad|iPod/.test(ua)) return 'ios';
+  if (/Android/.test(ua)) return 'android';
+  return 'desktop';
+}
+function renderInstallSection() {
+  const btn = $('btn-install-header'); if (btn) btn.style.display = (!isStandalone() && deferredInstallPrompt) ? '' : 'none';
+  const box = $('install-status'); if (!box) return;
+  if (isStandalone()) {
+    box.innerHTML = '<div class="advice-box insight good"><div class="ttl">✓ Installed</div><div class="txt">You\'re running Smart Finance Pro as an installed app.</div></div>';
+    $('btn-install-tools').style.display = 'none';
+    return;
+  }
+  $('btn-install-tools').style.display = deferredInstallPrompt ? '' : 'none';
+  const hint = platformHint();
+  const lines = [];
+  if (hint === 'ios') lines.push('<b>iPhone/iPad (Safari):</b> tap the Share icon (square with an arrow) at the bottom of the screen, then "Add to Home Screen".');
+  else if (hint === 'android') lines.push('<b>Android (Chrome):</b> tap the ⋮ menu, then "Install app" or "Add to Home screen" — or use the Install button above if it appeared.');
+  else lines.push('<b>Desktop (Chrome/Edge):</b> click the install icon in the address bar, or the ⋮ menu → "Install Smart Finance Pro…".');
+  lines.push('<b>Any other browser:</b> look for "Add to Home Screen" or "Install" in its menu.');
+  box.innerHTML = '<div class="sub">' + lines.join('<br>') + '</div>';
+}
+async function triggerInstall() {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  const choice = await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  toast(choice.outcome === 'accepted' ? 'Installing…' : 'Install dismissed');
+  renderInstallSection();
+}
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  renderInstallSection();
+});
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  toast('Smart Finance Pro installed 🎉');
+  renderInstallSection();
+});
 
 /* ================= CONFIG & CONSTANTS ================= */
 const KEYS = {
@@ -3087,6 +3168,7 @@ $('btn-advice').addEventListener('click', getAdvice);
 
 /* ================= TOOLS PAGE ================= */
 function renderToolsPage() {
+  renderInstallSection();
   $('api-key-input').value = getApiKey();
   renderApiStatus();
   $('base-currency').innerHTML = currencyOptionsHTML(baseCur());
@@ -3363,6 +3445,8 @@ $$('#nav-side button[data-page], nav.bottom button[data-page], .sheet button[dat
 $('sheet-backdrop').addEventListener('click', closeSheet);
 $('fab-add').addEventListener('click', () => { showPage('txns'); resetTxnForm(); $('txn-amount').focus(); });
 $('btn-setup').addEventListener('click', () => showPage('tools'));
+$('btn-install-header').addEventListener('click', triggerInstall);
+$('btn-install-tools').addEventListener('click', triggerInstall);
 
 /* ================= BOOTSTRAP ================= */
 migrate();
@@ -3370,6 +3454,7 @@ processDueRecurring();
 snapshotNetWorth();
 invalidateBalances();
 resetTxnForm();
+renderInstallSection();
 showPage('dashboard');
 </script>
 </body></html>
