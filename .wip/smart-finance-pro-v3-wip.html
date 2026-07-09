@@ -1463,6 +1463,33 @@ function dataChanged() {
 }
 function openSheet() { $('sheet-more').classList.add('show'); $('sheet-backdrop').classList.add('show'); }
 function closeSheet() { $('sheet-more').classList.remove('show'); $('sheet-backdrop').classList.remove('show'); }
+
+/* ================= CSV / FILE UTILS ================= */
+function csvEscape(v) {
+  const s = v == null ? '' : String(v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function toCSVString(headers, rows) {
+  return [headers.map(csvEscape).join(','), ...rows.map(r => r.map(csvEscape).join(','))].join('\r\n');
+}
+function downloadFile(filename, content, mime) {
+  const blob = new Blob([content], { type: mime || 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+  a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function downloadCSV(headers, rows, filename) { downloadFile(filename, toCSVString(headers, rows), 'text/csv'); }
+function exportTxnsCSV(list, filename) {
+  const headers = ['Date', 'Type', 'Category', 'Merchant/Source', 'From', 'To', 'Amount', 'Currency', 'Notes', 'Reference', 'Tags', 'Created', 'Modified'];
+  const rows = list.slice().sort((a, b) => dateOnly(a.date) < dateOnly(b.date) ? -1 : 1).map(t => [
+    dateOnly(t.date), t.type, t.category, t.merchant || t.source || '', accName(t.from), accName(t.to),
+    t.amount, t.currency, t.notes || '', t.reference || '', (t.tags || []).join('|'),
+    dateOnly(t.createdAt || t.date), dateOnly(t.modifiedAt || t.date)
+  ]);
+  downloadCSV(headers, rows, filename);
+  toast('Exported ' + rows.length + ' transactions');
+}
 </script>
 <script>
 'use strict';
@@ -2611,6 +2638,432 @@ $('loan-form').addEventListener('submit', e => {
   e.target.reset(); $('loanf-start').value = todayYMD();
   toast('Loan added'); dataChanged();
 });
+</script>
+<script>
+'use strict';
+
+/* ================= REPORTS ================= */
+let _reportRows = [];
+let _trendCategory = null;
+
+function renderReportsPage() {
+  const type = $('report-type').value;
+  $('report-range-field').style.display = (type === 'monthly' || type === 'yearly' || type === 'networth') ? 'none' : '';
+  $('report-custom-dates').style.display = ($('report-range').value === 'custom' && $('report-range-field').style.display !== 'none') ? '' : 'none';
+  buildReport();
+}
+$('report-type').addEventListener('change', renderReportsPage);
+$('report-range').addEventListener('change', () => {
+  $('report-custom-dates').style.display = $('report-range').value === 'custom' ? '' : 'none';
+  buildReport();
+});
+$('report-from').addEventListener('change', buildReport);
+$('report-to').addEventListener('change', buildReport);
+$('btn-report-csv').addEventListener('click', () => {
+  if (!_reportRows.length) { toast('Nothing to export for this report'); return; }
+  const headers = Object.keys(_reportRows[0]);
+  const rows = _reportRows.map(r => headers.map(h => r[h]));
+  downloadCSV(headers, rows, 'report-' + $('report-type').value + '.csv');
+  toast('Report exported');
+});
+$('btn-report-print').addEventListener('click', () => window.print());
+
+function buildReport() {
+  const type = $('report-type').value;
+  const bounds = rangeBounds($('report-range').value, $('report-from').value, $('report-to').value);
+  const fns = {
+    overview: reportOverview,
+    expense: () => reportCatBreakdown('expense', bounds),
+    income: () => reportCatBreakdown('income', bounds),
+    cashflow: reportCashflow,
+    category: reportCategoryTrend,
+    merchant: reportMerchant,
+    monthly: reportMonthly,
+    yearly: reportYearly,
+    networth: reportNetWorthReport,
+    savings: reportSavings
+  };
+  (fns[type] || reportOverview)(bounds);
+}
+
+/* ---- chart helpers (all draw into #chart-report) ---- */
+function setReportEmpty(isEmpty) {
+  const empty = isEmpty || !chartAvailable();
+  $('chart-report-empty').style.display = empty ? 'block' : 'none';
+  $('chart-report').parentElement.style.display = empty ? 'none' : '';
+}
+function drawPieChart(labels, values) {
+  if (!chartAvailable() || !labels.length) return;
+  drawChart('chart-report', {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: values, backgroundColor: labels.map((l, i) => PALETTE[i % PALETTE.length]), borderColor: '#1e293b', borderWidth: 2 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#cbd5e1', boxWidth: 10 } }, tooltip: { ...CHART_TOOLTIP, callbacks: { label: c => ' ' + c.label + ': ' + fmtBase(c.parsed) } } } }
+  });
+}
+function drawBarChart(labels, values, colors) {
+  if (!chartAvailable() || !labels.length) return;
+  drawChart('chart-report', {
+    type: 'bar',
+    data: { labels, datasets: [{ data: values, backgroundColor: colors || COLOR_LINE, borderRadius: 4 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { ...CHART_TOOLTIP, callbacks: { label: c => ' ' + fmtBase(c.parsed.y) } } }, scales: lineScales() }
+  });
+}
+function drawBarChart2(labels, a, b) {
+  if (!chartAvailable() || !labels.length) return;
+  drawChart('chart-report', {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Income', data: a, backgroundColor: COLOR_INCOME, borderRadius: 4 }, { label: 'Expense', data: b, backgroundColor: COLOR_EXPENSE, borderRadius: 4 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#cbd5e1', boxWidth: 10 } }, tooltip: { ...CHART_TOOLTIP, callbacks: { label: c => ' ' + c.dataset.label + ': ' + fmtBase(c.parsed.y) } } }, scales: lineScales() }
+  });
+}
+function drawLineChart2(labels, values, label) {
+  if (!chartAvailable() || !labels.length) return;
+  drawChart('chart-report', {
+    type: 'line',
+    data: { labels, datasets: [{ label, data: values, borderColor: COLOR_LINE, backgroundColor: 'rgba(57,135,229,.15)', fill: true, tension: .25, borderWidth: 2, pointRadius: labels.length > 30 ? 0 : 3 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { ...CHART_TOOLTIP, callbacks: { label: c => ' ' + fmtBase(c.parsed.y) } } }, scales: lineScales() }
+  });
+}
+function tableHTML(headers, rows) {
+  if (!rows.length) return '<div class="empty">No data for this report / period.</div>';
+  return '<div class="tbl-wrap"><table class="tbl"><thead><tr>' + headers.map(h => '<th' + (typeof rows[0][headers.indexOf(h)] === 'number' ? ' class="num"' : '') + '>' + esc(h) + '</th>').join('') +
+    '</tr></thead><tbody>' + rows.map(r => '<tr>' + r.map(c => '<td' + (typeof c === 'number' ? ' class="num"' : '') + '>' + esc(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>';
+}
+function renderTable(title, headers, rows, excluded) {
+  $('report-out').innerHTML = '<div class="card"><div class="title" style="margin-bottom:8px">' + esc(title) + '</div>' + tableHTML(headers, rows) +
+    (excluded ? '<div class="sub" style="margin-top:6px">' + excluded + ' transaction(s) excluded from totals — missing exchange rate. Set it in Tools.</div>' : '') + '</div>';
+}
+
+/* ---- individual reports ---- */
+function reportOverview(bounds) {
+  const list = txns.filter(t => inBounds(t, bounds));
+  const inc = sumBase(list.filter(t => t.type === 'income'));
+  const exp = sumBase(list.filter(t => t.type === 'expense'));
+  const savings = inc.sum - exp.sum;
+  const map = {};
+  for (const t of list) if (t.type === 'expense') { const v = txnBase(t); if (v != null) map[t.category] = (map[t.category] || 0) + v; }
+  const top = Object.entries(map).sort((a, b) => b[1] - a[1])[0];
+  const biggest = list.filter(t => t.type === 'expense').sort((a, b) => (txnBase(b) || 0) - (txnBase(a) || 0))[0];
+  drawBarChart(['Income', 'Expense', 'Savings'], [inc.sum, exp.sum, savings], [COLOR_INCOME, COLOR_EXPENSE, savings >= 0 ? COLOR_INCOME : COLOR_EXPENSE]);
+  setReportEmpty(!(inc.sum || exp.sum));
+  const rows = [
+    ['Income', fmtBase(inc.sum)], ['Expenses', fmtBase(exp.sum)], ['Savings', fmtBase(savings)],
+    ['Savings %', inc.sum > 0 ? Math.round(savings / inc.sum * 100) + '%' : '—'],
+    ['Top category', top ? top[0] + ' (' + fmtBase(top[1]) + ')' : '—'],
+    ['Biggest single expense', biggest ? (biggest.merchant || biggest.category) + ' — ' + fmtCur(biggest.amount, biggest.currency) + ' on ' + fmtDate(biggest.date) : '—'],
+    ['Net cash flow', fmtBase(savings)]
+  ];
+  renderTable('Overview: ' + fmtDate(bounds.from) + ' – ' + fmtDate(bounds.to), ['Metric', 'Value'], rows);
+  _reportRows = rows.map(r => ({ metric: r[0], value: r[1] }));
+}
+function reportCatBreakdown(kind, bounds) {
+  const list = txns.filter(t => inBounds(t, bounds) && t.type === kind);
+  const map = {}; let excluded = 0;
+  for (const t of list) { const v = txnBase(t); if (v == null) { excluded++; continue; } map[t.category] = (map[t.category] || 0) + v; }
+  const entries = Object.entries(map).sort((a, b) => b[1] - a[1]);
+  const total = entries.reduce((s, e) => s + e[1], 0);
+  drawPieChart(entries.map(e => e[0]), entries.map(e => e[1]));
+  setReportEmpty(!entries.length);
+  const rows = entries.map(([c, v]) => [c, fmtBase(v), total > 0 ? Math.round(v / total * 100) + '%' : '0%']);
+  renderTable((kind === 'expense' ? 'Expense' : 'Income') + ' Report: ' + fmtDate(bounds.from) + ' – ' + fmtDate(bounds.to), ['Category', 'Amount', '% of total'], rows, excluded);
+  _reportRows = entries.map(([c, v]) => ({ category: c, amount: v }));
+}
+function reportCashflow(bounds) {
+  const list = txns.filter(t => inBounds(t, bounds) && (t.type === 'income' || t.type === 'expense'));
+  const spanDays = Math.max(1, (new Date(bounds.to) - new Date(bounds.from)) / 864e5);
+  const byMonth = spanDays > 45;
+  const buckets = {};
+  for (const t of list) {
+    const key = byMonth ? monthKeyOf(t.date) : dateOnly(t.date);
+    const v = txnBase(t); if (v == null) continue;
+    buckets[key] = buckets[key] || { in: 0, out: 0 };
+    if (t.type === 'income') buckets[key].in += v; else buckets[key].out += v;
+  }
+  const keys = Object.keys(buckets).sort();
+  drawLineChart2(keys, keys.map(k => buckets[k].in - buckets[k].out), 'Net cash flow');
+  setReportEmpty(!keys.length);
+  const rows = keys.map(k => [k, fmtBase(buckets[k].in), fmtBase(buckets[k].out), fmtBase(buckets[k].in - buckets[k].out)]);
+  renderTable('Cash Flow (' + (byMonth ? 'monthly' : 'daily') + ')', ['Period', 'Income', 'Expense', 'Net'], rows);
+  _reportRows = keys.map(k => ({ period: k, income: buckets[k].in, expense: buckets[k].out, net: buckets[k].in - buckets[k].out }));
+}
+function reportCategoryTrend() {
+  const cats = [...new Set(txns.filter(t => t.type === 'expense').map(t => t.category))].sort();
+  if (!_trendCategory || !cats.includes(_trendCategory)) _trendCategory = cats[0] || null;
+  const months = lastNMonthKeys(12);
+  const perMonth = months.map(m => {
+    let s = 0;
+    for (const t of txnsInMonth(m)) if (t.type === 'expense' && t.category === _trendCategory) { const v = txnBase(t); if (v != null) s += v; }
+    return s;
+  });
+  drawLineChart2(months, perMonth, _trendCategory || 'Category');
+  setReportEmpty(!cats.length);
+  const selectHTML = cats.length ? '<div class="card"><div class="field" style="margin-bottom:0"><label for="report-cat-select">Category</label><select id="report-cat-select">' +
+    cats.map(c => '<option' + (c === _trendCategory ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '</select></div></div>' : '';
+  const rows = months.map((m, i) => [m, fmtBase(perMonth[i])]);
+  $('report-out').innerHTML = selectHTML + '<div class="card"><div class="title" style="margin-bottom:8px">Category Trend (12 months)</div>' + tableHTML(['Month', 'Spent'], rows) + '</div>';
+  const sel = $('report-cat-select');
+  if (sel) sel.addEventListener('change', e => { _trendCategory = e.target.value; buildReport(); });
+  _reportRows = months.map((m, i) => ({ month: m, category: _trendCategory, amount: perMonth[i] }));
+}
+function reportMerchant(bounds) {
+  const list = txns.filter(t => inBounds(t, bounds) && t.type === 'expense' && t.merchant);
+  const map = {};
+  for (const t of list) { const v = txnBase(t); if (v == null) continue; map[t.merchant] = (map[t.merchant] || 0) + v; }
+  const entries = Object.entries(map).sort((a, b) => b[1] - a[1]);
+  drawPieChart(entries.slice(0, 10).map(e => e[0]), entries.slice(0, 10).map(e => e[1]));
+  setReportEmpty(!entries.length);
+  const rows = entries.map(([m, v]) => [m, fmtBase(v)]);
+  renderTable('Merchant Analysis: ' + fmtDate(bounds.from) + ' – ' + fmtDate(bounds.to), ['Merchant', 'Total spent'], rows);
+  _reportRows = entries.map(([m, v]) => ({ merchant: m, amount: v }));
+}
+function reportMonthly() {
+  const year = new Date().getFullYear();
+  const nowKey = todayYMD().slice(0, 7);
+  const months = Array.from({ length: 12 }, (_, i) => year + '-' + String(i + 1).padStart(2, '0')).filter(m => m <= nowKey);
+  const incArr = [], expArr = [];
+  const rows = months.map(m => {
+    const ie = monthIncomeExpense(m); incArr.push(ie.income); expArr.push(ie.expense);
+    const savings = ie.income - ie.expense;
+    const { map } = categoryBreakdownMonth(m);
+    const top = Object.entries(map).sort((a, b) => b[1] - a[1])[0];
+    const biggest = txnsInMonth(m).filter(t => t.type === 'expense').sort((a, b) => (txnBase(b) || 0) - (txnBase(a) || 0))[0];
+    return [m, fmtBase(ie.income), fmtBase(ie.expense), fmtBase(savings), ie.income > 0 ? Math.round(savings / ie.income * 100) + '%' : '—',
+    top ? top[0] : '—', biggest ? fmtCur(biggest.amount, biggest.currency) : '—'];
+  });
+  drawBarChart2(months, incArr, expArr);
+  setReportEmpty(!months.length);
+  renderTable('Monthly Summary (' + year + ')', ['Month', 'Income', 'Expense', 'Savings', 'Savings %', 'Top Category', 'Biggest Expense'], rows);
+  _reportRows = rows.map((r, i) => ({ month: r[0], income: incArr[i], expense: expArr[i], savings: incArr[i] - expArr[i] }));
+}
+function reportYearly() {
+  const years = [...new Set(txns.map(t => dateOnly(t.date).slice(0, 4)))].sort();
+  const incArr = [], expArr = [];
+  const rows = years.map(y => {
+    const list = txns.filter(t => dateOnly(t.date).slice(0, 4) === y);
+    const inc = sumBase(list.filter(t => t.type === 'income')).sum;
+    const exp = sumBase(list.filter(t => t.type === 'expense')).sum;
+    incArr.push(inc); expArr.push(exp);
+    return [y, fmtBase(inc), fmtBase(exp), fmtBase(inc - exp)];
+  });
+  drawBarChart2(years, incArr, expArr);
+  setReportEmpty(!years.length);
+  renderTable('Yearly Report', ['Year', 'Income', 'Expense', 'Net'], rows);
+  _reportRows = rows.map((r, i) => ({ year: r[0], income: incArr[i], expense: expArr[i], net: incArr[i] - expArr[i] }));
+}
+function reportNetWorthReport() {
+  const nw = netWorth();
+  const rows = [];
+  for (const [cur, v] of Object.entries(nw.perCur)) rows.push([cur, fmtCur(v.assets, cur), fmtCur(v.liabilities, cur), fmtCur(v.assets - v.liabilities, cur)]);
+  rows.push(['≈ Base (' + baseCur() + ')', fmtBase(nw.base.assets), fmtBase(nw.base.liabilities), fmtBase(nw.base.net)]);
+  const pts = nwHistory.slice(-24);
+  drawLineChart2(pts.map(p => p.date), pts.map(p => p.net), 'Net worth');
+  setReportEmpty(!pts.length);
+  renderTable('Net Worth Report', ['Currency', 'Assets', 'Liabilities', 'Net'], rows);
+  _reportRows = rows.map(r => ({ currency: r[0], assets: r[1], liabilities: r[2], net: r[3] }));
+}
+function reportSavings() {
+  const months = lastNMonthKeys(12);
+  const netArr = [];
+  const rows = months.map(m => {
+    const ie = monthIncomeExpense(m); const savings = ie.income - ie.expense; netArr.push(savings);
+    const pct = ie.income > 0 ? savings / ie.income * 100 : 0;
+    return [m, fmtBase(ie.income), fmtBase(ie.expense), fmtBase(savings), Math.round(pct) + '%'];
+  });
+  const pcts = months.map(m => { const ie = monthIncomeExpense(m); return ie.income > 0 ? (ie.income - ie.expense) / ie.income * 100 : null; }).filter(v => v != null);
+  const avgPct = pcts.length ? pcts.reduce((s, v) => s + v, 0) / pcts.length : 0;
+  drawBarChart(months, netArr, months.map(() => COLOR_SAVINGS));
+  setReportEmpty(!months.length);
+  renderTable('Savings Report — average savings rate ' + Math.round(avgPct) + '%', ['Month', 'Income', 'Expense', 'Savings', 'Savings %'], rows);
+  _reportRows = rows.map((r, i) => ({ month: r[0], savings: netArr[i] }));
+}
+</script>
+<script>
+'use strict';
+
+/* ================= FINANCIAL HEALTH SCORE =================
+   Five weighted components, each normalized so the total is always 0-100
+   even with sparse data (missing components contribute a neutral value
+   rather than being skipped, so the score never looks artificially high
+   just because the user hasn't set budgets yet). */
+function computeHealthScore() {
+  const mk = thisMonthKey();
+  const ie = monthIncomeExpense(mk);
+  let pts = 0;
+  if (ie.income > 0) pts += Math.max(0, Math.min(30, (ie.income - ie.expense) / ie.income * 100));
+  else pts += 15;
+  const debtCards = cards.filter(c => !c.archived && c.type !== 'Debit' && c.limit > 0);
+  if (debtCards.length) {
+    const avgUtil = debtCards.reduce((s, c) => s + Math.min(1, balanceOf('card', c.id) / c.limit), 0) / debtCards.length;
+    pts += Math.max(0, Math.min(25, (1 - avgUtil) * 25));
+  } else pts += 25;
+  const bs = budgetStatus(mk);
+  if (bs.length) pts += (bs.filter(b => b.amount <= 0 || b.spent <= b.amount).length / bs.length) * 20;
+  else pts += 10;
+  const months3 = lastNMonthKeys(3);
+  const avgExp = months3.reduce((s, m) => s + monthIncomeExpense(m).expense, 0) / 3;
+  let cash = 0;
+  for (const w of wallets) if (!w.archived) { const v = amountToBase(balanceOf('wallet', w.id), w.currency || baseCur()); if (v != null) cash += v; }
+  for (const b of banks) if (!b.archived) { const v = amountToBase(balanceOf('bank', b.id), b.currency || baseCur()); if (v != null) cash += v; }
+  pts += avgExp > 0 ? Math.max(0, Math.min(15, (cash / (avgExp * 3)) * 15)) : 15;
+  const nw = netWorth();
+  pts += nw.base.assets > 0 ? Math.max(0, Math.min(10, (1 - nw.base.liabilities / nw.base.assets) * 10)) : 5;
+  return Math.round(Math.max(0, Math.min(100, pts)));
+}
+function healthLabel(score) {
+  if (score >= 80) return 'Excellent financial health';
+  if (score >= 65) return 'Good financial health';
+  if (score >= 45) return 'Fair — some areas need attention';
+  return 'Needs attention';
+}
+
+/* ================= AUTOMATIC INSIGHTS ================= */
+function findDuplicateTxns() {
+  const pairs = [];
+  const exp = txns.filter(t => t.type === 'expense');
+  for (let i = 0; i < exp.length; i++) {
+    for (let j = i + 1; j < exp.length; j++) {
+      const a = exp[i], b = exp[j];
+      if (a.amount === b.amount && a.category === b.category &&
+        Math.abs(new Date(a.date) - new Date(b.date)) <= 2 * 864e5 &&
+        (a.from ? refKey(a.from) : 'none') === (b.from ? refKey(b.from) : 'none')) pairs.push([a, b]);
+    }
+  }
+  return pairs;
+}
+function cashFlowForecast(days) {
+  let cash = 0;
+  for (const w of wallets) if (!w.archived) { const v = amountToBase(balanceOf('wallet', w.id), w.currency || baseCur()); if (v != null) cash += v; }
+  for (const b of banks) if (!b.archived) { const v = amountToBase(balanceOf('bank', b.id), b.currency || baseCur()); if (v != null) cash += v; }
+  const bounds = rangeBounds('custom', fmtYMD(new Date(Date.now() - 60 * 864e5)), todayYMD());
+  const list = txns.filter(t => inBounds(t, bounds));
+  const exp = sumBase(list.filter(t => t.type === 'expense')).sum;
+  const inc = sumBase(list.filter(t => t.type === 'income')).sum;
+  const dailyNet = (inc - exp) / 60;
+  return { cashNow: cash, projectedCash: cash + dailyNet * days, dailyNet };
+}
+function computeInsights() {
+  const out = [];
+  const mk = thisMonthKey();
+  const ie = monthIncomeExpense(mk);
+  const savingsPct = ie.income > 0 ? (ie.income - ie.expense) / ie.income * 100 : null;
+
+  out.push({ level: 'good', title: 'Monthly summary', text: 'This month: income ' + fmtBase(ie.income) + ', expenses ' + fmtBase(ie.expense) +
+    ', savings ' + fmtBase(ie.income - ie.expense) + (savingsPct != null ? ' (' + Math.round(savingsPct) + '% of income)' : '') + '.' });
+
+  if (savingsPct != null && savingsPct < 10) out.push({ level: 'warn', title: 'Low savings rate', text: 'You saved only ' + Math.round(savingsPct) + '% of income this month. Aim for at least 20% if possible.' });
+  else if (savingsPct != null && savingsPct >= 20) out.push({ level: 'good', title: 'Healthy savings rate', text: 'You saved ' + Math.round(savingsPct) + '% of income this month — keep it up.' });
+
+  for (const b of budgetStatus(mk)) {
+    if (b.amount > 0 && b.spent > b.amount) out.push({ level: 'crit', title: 'Budget exceeded: ' + b.category, text: fmtBase(b.spent) + ' spent of ' + fmtBase(b.amount) + ' budget (' + Math.round(b.spent / b.amount * 100) + '%).' });
+    else if (b.amount > 0 && b.spent / b.amount > 0.85) out.push({ level: 'warn', title: 'Nearing budget limit: ' + b.category, text: Math.round(b.spent / b.amount * 100) + '% of ' + fmtBase(b.amount) + ' budget used.' });
+  }
+
+  const debtCards = cards.filter(c => !c.archived && c.type !== 'Debit' && balanceOf('card', c.id) > 0).sort((a, b) => (b.rate || 0) - (a.rate || 0));
+  if (debtCards.length) {
+    const top = debtCards[0];
+    out.push({ level: 'warn', title: 'Card payoff priority', text: 'Pay down "' + top.name + '" first — it carries the highest interest rate (' + (top.rate || 0) + '% APR) among your ' + debtCards.length + ' card(s) with a balance.' });
+  }
+
+  const months = lastNMonthKeys(4);
+  const curMonth = months[3], prevMonths = months.slice(0, 3);
+  const curMap = categoryBreakdownMonth(curMonth).map;
+  const leaks = [];
+  for (const [cat, amt] of Object.entries(curMap)) {
+    const histAvg = prevMonths.reduce((s, m) => s + (categoryBreakdownMonth(m).map[cat] || 0), 0) / 3;
+    if (histAvg > 0 && amt > histAvg * 1.3 && amt - histAvg > 50) leaks.push({ cat, amt, histAvg, pct: (amt / histAvg - 1) * 100 });
+  }
+  leaks.sort((a, b) => b.pct - a.pct);
+  if (leaks[0]) out.push({ level: 'warn', title: 'Possible spending leak: ' + leaks[0].cat, text: fmtBase(leaks[0].amt) + ' this month vs your ' + fmtBase(leaks[0].histAvg) + ' average — up ' + Math.round(leaks[0].pct) + '%.' });
+
+  const dupes = findDuplicateTxns();
+  if (dupes.length) out.push({ level: 'warn', title: 'Possible duplicate transactions', text: dupes.length + ' pair(s) of transactions share the same amount, category and account within 2 days. Worth checking the Transactions list.' });
+
+  const forecast = cashFlowForecast(30);
+  out.push({
+    level: forecast.projectedCash < 0 ? 'crit' : 'good', title: '30-day cash flow forecast',
+    text: 'Based on your last 60 days of activity, projected cash in 30 days: ≈' + fmtBase(forecast.projectedCash) + (forecast.projectedCash < 0 ? ' — you may run short.' : '.')
+  });
+
+  const score = computeHealthScore();
+  out.unshift({ level: score >= 65 ? 'good' : score >= 45 ? 'warn' : 'crit', title: 'Financial health score: ' + score + '/100', text: healthLabel(score) + '.' });
+  return out;
+}
+function renderInsightsInto(el, limit) {
+  const items = computeInsights().slice(0, limit || 99);
+  el.innerHTML = items.length ? items.map(i =>
+    '<div class="advice-box insight ' + i.level + '"><div class="ttl">' + esc(i.title) + '</div><div class="txt">' + esc(i.text) + '</div></div>').join('')
+    : '<div class="empty">Add some transactions to see insights.</div>';
+}
+$('btn-refresh-insights').addEventListener('click', () => { renderInsightsInto($('insights-list')); toast('Insights refreshed'); });
+
+/* ================= AI PAGE ================= */
+function renderAIPage() {
+  const score = computeHealthScore();
+  $('health-score').textContent = score;
+  $('health-label').textContent = healthLabel(score);
+  const bar = $('health-bar');
+  bar.style.width = score + '%';
+  bar.style.background = score >= 65 ? 'var(--good)' : score >= 45 ? 'var(--warning)' : 'var(--critical)';
+  renderApiStatus();
+  renderInsightsInto($('insights-list'));
+}
+
+/* ================= AI ADVISOR (Claude API) ================= */
+function getApiKey() { return localStorage.getItem(KEYS.apiKey) || ''; }
+function renderApiStatus() {
+  const valid = getApiKey().length > 10;
+  for (const id of ['api-status', 'tools-api-status']) {
+    const el = $(id); if (!el) continue;
+    el.textContent = valid ? '✓ Connected' : 'No API key set — add one below in Tools.';
+    el.className = 'api-status ' + (valid ? 'ok' : 'bad');
+  }
+}
+function buildAIContext() {
+  const mk = thisMonthKey();
+  const ie = monthIncomeExpense(mk);
+  const nw = netWorth();
+  const { map: catMap } = categoryBreakdownMonth(mk);
+  const catLines = Object.entries(catMap).map(([c, v]) => c + ': ' + fmtBase(v)).join(', ') || 'none';
+  const cardLines = cards.filter(c => !c.archived).map(c =>
+    c.name + ' (' + c.type + ', balance ' + fmtCur(balanceOf('card', c.id), cardCurrency(c)) + (c.limit > 0 ? ' of ' + fmtCur(c.limit, cardCurrency(c)) + ' limit' : '') + ')'
+  ).join('; ') || 'none';
+  const loanLines = loans.map(l => l.person + ' (' + l.direction + ', remaining ' + fmtCur(loanRemaining(l), l.currency || baseCur()) + ')').join('; ') || 'none';
+  const budgetLines = budgetStatus(mk).map(b => b.category + ': ' + fmtBase(b.spent) + ' of ' + fmtBase(b.amount)).join('; ') || 'none';
+  return 'User financial data (base currency ' + baseCur() + ') — Net worth: ≈' + fmtBase(nw.base.net) + ' (assets ≈' + fmtBase(nw.base.assets) + ', liabilities ≈' + fmtBase(nw.base.liabilities) + ')' +
+    '. This month income: ' + fmtBase(ie.income) + ', expenses: ' + fmtBase(ie.expense) + ', savings: ' + fmtBase(ie.income - ie.expense) +
+    '. Spending by category: ' + catLines + '. Budgets: ' + budgetLines + '. Cards: ' + cardLines + '. Loans: ' + loanLines +
+    '. Active installments: ' + activeInstallments().length + '. Financial health score: ' + computeHealthScore() + '/100.';
+}
+async function getAdvice() {
+  const key = getApiKey();
+  const out = $('advice-out'), btn = $('btn-advice'), q = $('advice-q').value.trim();
+  if (key.length <= 10) { out.innerHTML = '<div class="advice-box"><div class="who">⚠️ Setup needed</div>No valid API key. Add one in the Tools page.</div>'; return; }
+  if (!q) { out.innerHTML = '<div class="advice-box"><div class="who">🤖 Advisor</div>Type a question first — e.g. "How can I reduce my spending?"</div>'; return; }
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Thinking…';
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', signal: controller.signal,
+      headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({
+        model: 'claude-opus-4-8', max_tokens: 600,
+        system: "You are a friendly, professional personal finance advisor. Provide concise, actionable advice based on the user's financial data.",
+        messages: [{ role: 'user', content: buildAIContext() + '\n\nUser question: ' + q }]
+      })
+    });
+    if (!res.ok) throw new Error('API returned ' + res.status);
+    const data = await res.json();
+    const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n') || '(no response)';
+    out.innerHTML = '<div class="advice-box"><div class="who">🤖 Your AI Financial Advisor</div>' + esc(text) + '</div>';
+  } catch (err) {
+    const msg = err.name === 'AbortError' ? 'Request timed out after 10 seconds.' : 'Error: Check your API key. (' + esc(err.message) + ')';
+    out.innerHTML = '<div class="advice-box"><div class="who">⚠️ Error</div>' + msg + '</div>';
+  } finally {
+    clearTimeout(timer); btn.disabled = false; btn.textContent = 'Get AI Advice';
+  }
+}
+$('btn-advice').addEventListener('click', getAdvice);
 </script>
 <script>
 'use strict';
