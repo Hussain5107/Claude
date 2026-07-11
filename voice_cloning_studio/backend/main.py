@@ -44,7 +44,7 @@ async def clone_voice(name: str = Form(...), audio: UploadFile = File(...)):
         tts_engine.extract_and_save_embedding(str(audio_path), str(embedding_path))
     except Exception as e:
         audio_path.unlink(missing_ok=True)
-        raise HTTPException(500, f"Failed to process reference audio: {e}")
+        raise HTTPException(500, f"Failed to process reference audio: {type(e).__name__}: {e}")
 
     voice_id = database.insert_voice(safe_name, str(audio_path), str(embedding_path))
     return database.get_voice(voice_id)
