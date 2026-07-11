@@ -22,6 +22,7 @@ backend/
   config.py             all tunables, env-var driven (see .env.example)
   logging_config.py     structured logging setup
   exceptions.py         domain error types -> HTTP status mapping
+  profiling.py            per-stage timing / real-time-factor tracking
   database.py            SQLite access (one `voices` table)
   tts_engine.py          Chatterbox model singleton + embedding load/save
   audio_utils.py         text chunking + long-form generation orchestration
@@ -32,6 +33,7 @@ frontend/
 mcp_server/
   zahra_mcp.py           MCP bridge so Claude Desktop can write + narrate scripts directly
 tests/                    pytest suite (only chatterbox mocked -- no GPU/model download needed)
+benchmark_pipeline.py     stage-by-stage profiling + before/after benchmark (see Performance below)
 voices/                  saved reference clips + embeddings (created at runtime, git-ignored)
 output/                  generated audio files (created at runtime, git-ignored)
 ```
@@ -191,6 +193,55 @@ see `.github/workflows/voice_cloning_studio-ci.yml`.
   actual generated audio duration of each chunk (not guessed from text
   length), so timing is accurate without needing a separate speech-to-text
   pass.
+
+## Performance
+
+**The top bottleneck, by a wide margin, is the model's own inference** (T3's
+autoregressive token-by-token decoding on CPU) — this dominates real
+generation time for any script longer than a few seconds, and there's no
+optimization in our own code that changes that; it's Chatterbox's own
+implementation. What we control is everything *around* inference, and this
+was profiled and optimized directly:
+
+- **Threading:** `torch.set_num_threads` (intra-op parallelism, does the
+  real work) was already set; added `torch.set_num_interop_threads`
+  (`TORCH_NUM_INTEROP_THREADS`, default 1) alongside it -- PyTorch's own
+  guidance for a single-request CPU workload like this one is to keep
+  inter-op threads low and let intra-op threads do the parallelizing, since
+  extra inter-op threads just add contention here.
+- **Eliminated redundant work:** the voice embedding is loaded from disk
+  once per job and reused across every chunk (an earlier version reloaded
+  it per chunk).
+- **Streaming, verified with a real benchmark, not assumed:** chunks stream
+  directly to the output file as they're generated when no post-processing
+  is needed, instead of buffering the whole script in memory --
+  `benchmark_pipeline.py` (synthetic model, real memory measurement) shows
+  **~60-90% peak memory reduction** for this case depending on script
+  length. When post-processing (loudness normalization) *is* enabled (the
+  default), it inherently needs the whole signal in memory regardless of
+  write strategy, so streaming doesn't help there -- an earlier attempt to
+  stream-then-read-back for that case was actually *worse* (extra disk I/O
+  plus a redundant dtype conversion), caught by the same benchmark and
+  reverted in favor of just buffering directly, matching what pyloudnorm
+  needs anyway. A separate real fix in that path removed a redundant
+  float64 copy we were making before pyloudnorm's own (necessary) one.
+- **Built-in profiling:** every generation logs a stage-by-stage timing
+  breakdown (model load, embedding load, per-chunk inference, write,
+  post-processing, total, and real-time factor) when
+  `ENABLE_PIPELINE_PROFILING` is on (default) -- see `backend/profiling.py`.
+
+**Run the benchmark yourself:**
+```
+python benchmark_pipeline.py                       # synthetic model, default ~3000 words
+python benchmark_pipeline.py --words 9000           # longer synthetic script
+python benchmark_pipeline.py --real --embedding-path voices/<name>.conds.pt   # real model, real RTF
+```
+The synthetic mode (default) measures our own orchestration overhead in a
+way that's reproducible on any machine, by substituting a controlled
+stand-in for model inference. It cannot tell you your real generation
+speed -- for that, `--real` uses the actual model on your machine and
+prints a real RTF (e.g. RTF 2.0 means a 10-minute script takes ~20 minutes
+to render).
 
 ## Known limitations
 

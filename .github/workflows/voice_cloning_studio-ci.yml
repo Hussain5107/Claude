@@ -26,7 +26,7 @@ jobs:
         run: pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
 
       - name: Install remaining dev dependencies
-        run: pip install pytest httpx ruff fastapi python-multipart gradio requests numpy pyloudnorm "mcp[cli]"
+        run: pip install pytest httpx ruff fastapi python-multipart gradio requests numpy pyloudnorm "mcp[cli]" psutil
 
       - name: Lint
         run: ruff check .

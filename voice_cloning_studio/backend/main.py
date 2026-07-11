@@ -22,6 +22,7 @@ from .exceptions import (
 )
 from .jobs import JobStatus, job_manager
 from .logging_config import configure_logging, get_logger
+from .profiling import PipelineProfile
 
 configure_logging()
 logger = get_logger(__name__)
@@ -186,16 +187,25 @@ async def generate_speech(
     captions_path = settings.output_dir / f"{job_uuid}.srt"
 
     def work(on_progress):
-        samples, sample_rate, cues = audio_utils.generate_long_form(
+        profile = PipelineProfile()
+        cues = audio_utils.generate_long_form(
             text,
             voice["embedding_path"],
+            out_path,
             language_id=language,
             exaggeration=exaggeration,
             cfg_weight=cfg_weight,
             on_progress=on_progress,
+            profile=profile,
         )
-        audio_utils.save_wav(samples, sample_rate, out_path)
         audio_utils.write_srt(cues, captions_path)
+        if settings.enable_pipeline_profiling:
+            profile.model_load_sec = tts_engine.get_last_model_load_seconds()
+            profile.total_sec = (
+                profile.model_load_sec + profile.embedding_load_sec + profile.inference_sec
+                + profile.postprocess_sec + profile.write_sec
+            )
+            logger.info("Pipeline profile: %s", profile.summary())
         return out_path, captions_path
 
     job_id = job_manager.submit(work)

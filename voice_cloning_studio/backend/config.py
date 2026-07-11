@@ -73,8 +73,22 @@ class Settings:
     torch_num_threads: int = field(
         default_factory=lambda: _env_int("TORCH_NUM_THREADS", os.cpu_count() or 4)
     )
+    # Inter-op thread pool: parallelizes independent ops within one forward pass.
+    # For a single-request CPU inference workload (our case -- one job worker),
+    # PyTorch's own guidance is to keep this low (1-2) and let torch_num_threads
+    # (intra-op, i.e. within one matmul) do the real parallelization; too many
+    # interop threads causes contention rather than speedup here.
+    torch_num_interop_threads: int = field(
+        default_factory=lambda: _env_int("TORCH_NUM_INTEROP_THREADS", 1)
+    )
     # "cuda", "cpu", or "" to auto-detect
     device_override: str = field(default_factory=lambda: _env_str("DEVICE_OVERRIDE", ""))
+
+    # Profiling: log a per-stage timing summary (model load, embedding load,
+    # per-chunk inference, post-processing, write) after every generation.
+    enable_pipeline_profiling: bool = field(
+        default_factory=lambda: _env_bool("ENABLE_PIPELINE_PROFILING", True)
+    )
 
     # Job retention
     job_retention_seconds: int = field(default_factory=lambda: _env_int("JOB_RETENTION_SECONDS", 3600))

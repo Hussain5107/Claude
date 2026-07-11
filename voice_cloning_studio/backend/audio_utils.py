@@ -1,4 +1,5 @@
 import re
+import wave
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -6,12 +7,12 @@ from pathlib import Path
 import numpy as np
 import pyloudnorm as pyln
 import torch
-import torchaudio
 
 from . import tts_engine
 from .config import settings
 from .exceptions import InvalidTextError
 from .logging_config import get_logger
+from .profiling import PipelineProfile, stage_timer
 
 logger = get_logger(__name__)
 
@@ -53,24 +54,71 @@ def chunk_text(text: str, max_chars: int | None = None) -> list[TextChunk]:
     return chunks
 
 
+def _open_wav_writer(path: Path, sample_rate: int) -> wave.Wave_write:
+    writer = wave.open(str(path), "wb")
+    writer.setnchannels(1)
+    writer.setsampwidth(2)  # 16-bit PCM
+    writer.setframerate(sample_rate)
+    return writer
+
+
+def _write_pcm16(writer: wave.Wave_write, samples: torch.Tensor) -> None:
+    clamped = samples.clamp(-1.0, 1.0)
+    int16 = (clamped * 32767.0).to(torch.int16)
+    writer.writeframes(int16.numpy().tobytes())
+
+
+def _read_pcm16_wav(path: Path) -> tuple[torch.Tensor, int]:
+    """Reads back a WAV written by _write_pcm16, without going through
+    torchaudio.load -- recent torchaudio versions route .load() through an
+    optional torchcodec backend that may not be installed, but since we
+    fully control the format we wrote, stdlib `wave` reads it back directly."""
+    with wave.open(str(path), "rb") as reader:
+        sample_rate = reader.getframerate()
+        raw = reader.readframes(reader.getnframes())
+    int16 = np.frombuffer(raw, dtype=np.int16)
+    samples = torch.from_numpy(int16.astype(np.float32) / 32767.0)
+    return samples, sample_rate
+
+
 def generate_long_form(
     text: str,
     embedding_path: str,
+    out_path: Path,
     language_id: str = "en",
     exaggeration: float = 0.5,
     cfg_weight: float = 0.5,
     on_progress: ProgressCallback | None = None,
-) -> tuple[torch.Tensor, int, list[CaptionCue]]:
-    """Generates narration for arbitrarily long text.
+    profile: PipelineProfile | None = None,
+) -> list[CaptionCue]:
+    """Generates narration for arbitrarily long text, writing it to out_path.
 
     Chunks the text (the underlying model can only generate a limited amount
-    of audio per call), loads the voice embedding once, and reuses it across
-    all chunks -- reloading it from disk per chunk was a measured, avoidable
-    cost. Calls ``on_progress(done, total)`` after each chunk if provided.
+    of audio per call) and loads the voice embedding once, reusing it across
+    all chunks.
 
-    Returns the final audio, its sample rate, and caption cues timed against
-    that audio (accurate, since they're built from the real generated chunk
-    durations rather than guessed from text length).
+    Two write strategies, chosen based on whether post-processing is needed:
+
+    - No post-processing (silence trim / loudness normalization both off):
+      chunks stream directly to out_path as they're generated, bounding
+      memory to roughly one chunk at a time regardless of script length.
+      Measured with benchmark_pipeline.py: this is a clear win over
+      buffering everything in a list and concatenating once at the end.
+
+    - Post-processing enabled (the default): loudness normalization
+      inherently needs to see the whole signal, so a full in-memory view is
+      unavoidable at that point regardless of write strategy. An earlier
+      version of this function streamed to a temp file and read it back for
+      this case too -- benchmarking that (see benchmark_pipeline.py) showed
+      it was actually *worse*: the disk round-trip plus an extra float32 ->
+      int16 -> float32 -> float64 conversion chain cost more memory and
+      time than just keeping chunks as in-memory tensors and concatenating
+      once, which is what this case does instead.
+
+    Calls ``on_progress(done, total)`` after each chunk. If ``profile`` is
+    given, per-stage timings are recorded into it.
+
+    Returns caption cues timed against the actual final audio.
     """
     if len(text) > settings.max_text_chars:
         raise InvalidTextError(
@@ -83,57 +131,132 @@ def generate_long_form(
         raise InvalidTextError("No text to synthesize")
 
     logger.info("Generating %d chunk(s) for a %d-character script", len(chunks), len(text))
-    conditionals = tts_engine.load_conditionals(embedding_path)
 
-    pieces = []
+    with stage_timer() as t:
+        conditionals = tts_engine.load_conditionals(embedding_path)
+    if profile:
+        profile.embedding_load_sec = t["elapsed"]
+
+    needs_postprocess = settings.enable_silence_trim or settings.enable_loudness_normalization
+    generate_fn = _generate_buffered if needs_postprocess else _generate_streamed
+    cues, cumulative_sec, write_sec, postprocess_sec = generate_fn(
+        chunks, conditionals, out_path, language_id, exaggeration, cfg_weight, on_progress, profile
+    )
+
+    if profile:
+        profile.write_sec = write_sec
+        profile.postprocess_sec = postprocess_sec
+        profile.audio_duration_sec = cumulative_sec
+
+    return cues
+
+
+def _generate_streamed(
+    chunks, conditionals, out_path, language_id, exaggeration, cfg_weight, on_progress, profile
+) -> tuple[list[CaptionCue], float, float, float]:
+    """No post-processing needed: stream each chunk directly to out_path."""
+    writer: wave.Wave_write | None = None
+    cues: list[CaptionCue] = []
+    cumulative_sec = 0.0
+    write_sec = 0.0
+    truncated_count = 0
+
+    try:
+        for i, chunk in enumerate(chunks):
+            wav, sample_rate, truncated = _generate_one_chunk(
+                chunk, conditionals, language_id, exaggeration, cfg_weight, profile
+            )
+            if truncated:
+                truncated_count += 1
+            if writer is None:
+                writer = _open_wav_writer(out_path, sample_rate)
+
+            cue_end, gap = _append_cue_and_gap(cues, cumulative_sec, chunk, wav, sample_rate)
+            cumulative_sec = cue_end + (gap.shape[-1] / sample_rate)
+
+            with stage_timer() as t:
+                _write_pcm16(writer, wav)
+                _write_pcm16(writer, gap)
+            write_sec += t["elapsed"]
+
+            if on_progress:
+                on_progress(i + 1, len(chunks))
+    finally:
+        if writer is not None:
+            writer.close()
+
+    _log_truncated(truncated_count, len(chunks))
+    return cues, cumulative_sec, write_sec, 0.0
+
+
+def _generate_buffered(
+    chunks, conditionals, out_path, language_id, exaggeration, cfg_weight, on_progress, profile
+) -> tuple[list[CaptionCue], float, float, float]:
+    """Post-processing needed: keep chunks as in-memory tensors (avoids a
+    wasteful disk round-trip since we need a full in-memory view anyway)."""
+    pieces: list[torch.Tensor] = []
     cues: list[CaptionCue] = []
     cumulative_sec = 0.0
     sample_rate = None
     truncated_count = 0
 
     for i, chunk in enumerate(chunks):
-        wav, sample_rate, truncated = tts_engine.generate_chunk(
-            chunk.text,
-            conditionals,
-            language_id=language_id,
-            exaggeration=exaggeration,
-            cfg_weight=cfg_weight,
+        wav, sample_rate, truncated = _generate_one_chunk(
+            chunk, conditionals, language_id, exaggeration, cfg_weight, profile
         )
         if truncated:
             truncated_count += 1
         pieces.append(wav)
 
-        chunk_duration = wav.shape[-1] / sample_rate
-        cues.append(CaptionCue(start=cumulative_sec, end=cumulative_sec + chunk_duration, text=chunk.text))
-        cumulative_sec += chunk_duration
-
-        gap_sec = (
-            settings.chunk_gap_paragraph_sec if chunk.is_paragraph_end else settings.chunk_gap_sentence_sec
-        )
-        pieces.append(torch.zeros(int(gap_sec * sample_rate)))
-        cumulative_sec += gap_sec
+        cue_end, gap = _append_cue_and_gap(cues, cumulative_sec, chunk, wav, sample_rate)
+        cumulative_sec = cue_end + (gap.shape[-1] / sample_rate)
+        pieces.append(gap)
 
         if on_progress:
             on_progress(i + 1, len(chunks))
 
-    if truncated_count:
-        logger.warning(
-            "%d/%d chunk(s) hit the repetition cutoff even after retries", truncated_count, len(chunks)
+    _log_truncated(truncated_count, len(chunks))
+
+    with stage_timer() as t:
+        audio = torch.cat(pieces)
+
+        if settings.enable_silence_trim:
+            audio, trimmed_start_sec = _trim_silence(audio, sample_rate, settings.silence_trim_threshold_db)
+            final_duration = audio.shape[-1] / sample_rate
+            for cue in cues:
+                cue.start = max(0.0, cue.start - trimmed_start_sec)
+                cue.end = max(0.0, min(cue.end - trimmed_start_sec, final_duration))
+
+        if settings.enable_loudness_normalization:
+            audio = _normalize_loudness(audio, sample_rate, settings.target_lufs)
+
+        save_wav(audio, sample_rate, out_path)
+
+    return cues, cumulative_sec, 0.0, t["elapsed"]
+
+
+def _generate_one_chunk(chunk, conditionals, language_id, exaggeration, cfg_weight, profile):
+    with stage_timer() as t:
+        result = tts_engine.generate_chunk(
+            chunk.text, conditionals,
+            language_id=language_id, exaggeration=exaggeration, cfg_weight=cfg_weight,
         )
+    if profile:
+        profile.chunk_generate_sec.append(t["elapsed"])
+    return result
 
-    audio = torch.cat(pieces)
 
-    if settings.enable_silence_trim:
-        audio, trimmed_start_sec = _trim_silence(audio, sample_rate, settings.silence_trim_threshold_db)
-        final_duration = audio.shape[-1] / sample_rate
-        for cue in cues:
-            cue.start = max(0.0, cue.start - trimmed_start_sec)
-            cue.end = max(0.0, min(cue.end - trimmed_start_sec, final_duration))
+def _append_cue_and_gap(cues, cumulative_sec, chunk, wav, sample_rate) -> tuple[float, torch.Tensor]:
+    chunk_duration = wav.shape[-1] / sample_rate
+    cue_end = cumulative_sec + chunk_duration
+    cues.append(CaptionCue(start=cumulative_sec, end=cue_end, text=chunk.text))
+    gap_sec = settings.chunk_gap_paragraph_sec if chunk.is_paragraph_end else settings.chunk_gap_sentence_sec
+    return cue_end, torch.zeros(int(gap_sec * sample_rate))
 
-    if settings.enable_loudness_normalization:
-        audio = _normalize_loudness(audio, sample_rate, settings.target_lufs)
 
-    return audio, sample_rate, cues
+def _log_truncated(truncated_count: int, total: int) -> None:
+    if truncated_count:
+        logger.warning("%d/%d chunk(s) hit the repetition cutoff even after retries", truncated_count, total)
 
 
 def _trim_silence(samples: torch.Tensor, sample_rate: int, threshold_db: float) -> tuple[torch.Tensor, float]:
@@ -155,9 +278,14 @@ def _trim_silence(samples: torch.Tensor, sample_rate: int, threshold_db: float) 
 
 
 def _normalize_loudness(samples: torch.Tensor, sample_rate: int, target_lufs: float) -> torch.Tensor:
+    """pyloudnorm accepts float32 directly (verified) -- casting to float64
+    ourselves first, on top of the float64 buffer pyloudnorm's own
+    normalize.loudness() allocates internally regardless, was a redundant
+    extra full-size copy. Skipping our own cast halves the float64 memory
+    cost of this stage (one buffer instead of two)."""
     if samples.numel() == 0:
         return samples
-    audio_np = samples.numpy().astype(np.float64)
+    audio_np = samples.numpy()
     meter = pyln.Meter(sample_rate)
     try:
         loudness = meter.integrated_loudness(audio_np)
@@ -168,12 +296,19 @@ def _normalize_loudness(samples: torch.Tensor, sample_rate: int, target_lufs: fl
         return samples
 
     normalized = pyln.normalize.loudness(audio_np, loudness, target_lufs)
-    normalized = np.clip(normalized, -1.0, 1.0)
+    np.clip(normalized, -1.0, 1.0, out=normalized)
     return torch.from_numpy(normalized.astype(np.float32))
 
 
 def save_wav(samples: torch.Tensor, sample_rate: int, path: Path) -> None:
-    torchaudio.save(str(path), samples.unsqueeze(0), sample_rate)
+    """Writes via stdlib `wave`, not torchaudio.save -- recent torchaudio versions
+    route .save() through an optional torchcodec backend that isn't always
+    installed; this has no such dependency."""
+    writer = _open_wav_writer(path, sample_rate)
+    try:
+        _write_pcm16(writer, samples)
+    finally:
+        writer.close()
     logger.info("Saved %s (%.1fs of audio)", path, samples.shape[-1] / sample_rate)
 
 

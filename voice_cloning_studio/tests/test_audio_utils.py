@@ -4,6 +4,7 @@ import torch
 
 from backend import audio_utils
 from backend.exceptions import InvalidTextError
+from backend.profiling import PipelineProfile
 
 
 def test_chunk_text_respects_max_chars():
@@ -35,17 +36,19 @@ def test_chunk_text_empty_input():
     assert audio_utils.chunk_text("   \n\n  ") == []
 
 
-def test_generate_long_form_rejects_empty_text():
+def test_generate_long_form_rejects_empty_text(tmp_path):
     with pytest.raises(InvalidTextError):
-        audio_utils.generate_long_form("", "/fake/embedding.pt")
+        audio_utils.generate_long_form("", "/fake/embedding.pt", tmp_path / "out.wav")
 
 
-def test_generate_long_form_rejects_oversized_text(monkeypatch):
+def test_generate_long_form_rejects_oversized_text(tmp_path, monkeypatch):
     from backend.config import settings
 
     monkeypatch.setattr(settings, "max_text_chars", 10)
     with pytest.raises(InvalidTextError):
-        audio_utils.generate_long_form("this text is definitely longer than ten chars", "/fake/embedding.pt")
+        audio_utils.generate_long_form(
+            "this text is definitely longer than ten chars", "/fake/embedding.pt", tmp_path / "out.wav"
+        )
 
 
 SAMPLE_RATE = 16000
@@ -61,7 +64,7 @@ def _fake_generate_chunk_factory(calls, seconds_per_chunk=0.2, truncated=False):
     return fake_generate_chunk
 
 
-def test_generate_long_form_calls_progress_callback(monkeypatch):
+def test_generate_long_form_calls_progress_callback(tmp_path, monkeypatch):
     from backend import tts_engine
     from backend.config import settings
 
@@ -73,18 +76,21 @@ def test_generate_long_form_calls_progress_callback(monkeypatch):
     monkeypatch.setattr(tts_engine, "generate_chunk", _fake_generate_chunk_factory(calls))
 
     progress_calls = []
-    _, _, cues = audio_utils.generate_long_form(
+    out_path = tmp_path / "out.wav"
+    cues = audio_utils.generate_long_form(
         "First sentence. Second sentence.\n\nThird paragraph sentence.",
         "/fake/embedding.pt",
+        out_path,
         on_progress=lambda done, total: progress_calls.append((done, total)),
     )
 
     assert len(calls) == len(progress_calls)
     assert progress_calls[-1][0] == progress_calls[-1][1]  # final call reports done == total
     assert len(cues) == len(calls)
+    assert out_path.exists()  # streamed directly, no post-processing enabled
 
 
-def test_generate_long_form_captions_are_sequential_and_nonoverlapping(monkeypatch):
+def test_generate_long_form_captions_are_sequential_and_nonoverlapping(tmp_path, monkeypatch):
     from backend import tts_engine
     from backend.config import settings
 
@@ -96,17 +102,41 @@ def test_generate_long_form_captions_are_sequential_and_nonoverlapping(monkeypat
     fake_chunk = _fake_generate_chunk_factory(calls, seconds_per_chunk=0.3)
     monkeypatch.setattr(tts_engine, "generate_chunk", fake_chunk)
 
-    audio, sample_rate, cues = audio_utils.generate_long_form(
+    out_path = tmp_path / "out.wav"
+    cues = audio_utils.generate_long_form(
         "First sentence. Second sentence. Third sentence.",
         "/fake/embedding.pt",
+        out_path,
     )
 
-    assert sample_rate == SAMPLE_RATE
     for cue in cues:
         assert cue.end > cue.start
     for a, b in zip(cues, cues[1:], strict=False):
         assert b.start >= a.end  # no overlap, monotonically increasing
-    assert audio.shape[-1] / sample_rate >= cues[-1].end
+
+    written_audio, sample_rate = audio_utils._read_pcm16_wav(out_path)
+    assert sample_rate == SAMPLE_RATE
+    assert written_audio.shape[-1] / sample_rate >= cues[-1].end
+
+
+def test_generate_long_form_with_postprocessing_writes_final_file(tmp_path, monkeypatch):
+    from backend import tts_engine
+    from backend.config import settings
+
+    monkeypatch.setattr(settings, "enable_loudness_normalization", True)
+    monkeypatch.setattr(settings, "enable_silence_trim", True)
+
+    calls = []
+    monkeypatch.setattr(tts_engine, "load_conditionals", lambda path: "fake-conds")
+    fake_chunk = _fake_generate_chunk_factory(calls, seconds_per_chunk=0.3)
+    monkeypatch.setattr(tts_engine, "generate_chunk", fake_chunk)
+
+    out_path = tmp_path / "out.wav"
+    cues = audio_utils.generate_long_form("One sentence. Two sentences.", "/fake/embedding.pt", out_path)
+
+    assert out_path.exists()
+    assert len(list(tmp_path.glob("*.raw.wav"))) == 0  # temp file cleaned up
+    assert len(cues) == len(calls)
 
 
 def test_trim_silence_removes_leading_and_trailing_quiet(monkeypatch):
@@ -155,3 +185,27 @@ def test_write_srt_format(tmp_path):
     content = out_path.read_text()
     assert "1\n00:00:00,000 --> 00:00:01,500\nHello there." in content
     assert "2\n00:00:01,650 --> 00:00:03,200\nSecond line." in content
+
+
+def test_generate_long_form_populates_profile(tmp_path, monkeypatch):
+    from backend import tts_engine
+    from backend.config import settings
+
+    monkeypatch.setattr(settings, "enable_loudness_normalization", False)
+    monkeypatch.setattr(settings, "enable_silence_trim", False)
+
+    calls = []
+    monkeypatch.setattr(tts_engine, "load_conditionals", lambda path: "fake-conds")
+    fake_chunk = _fake_generate_chunk_factory(calls, seconds_per_chunk=0.3)
+    monkeypatch.setattr(tts_engine, "generate_chunk", fake_chunk)
+
+    profile = PipelineProfile()
+    audio_utils.generate_long_form(
+        "First sentence. Second sentence.", "/fake/embedding.pt", tmp_path / "out.wav", profile=profile,
+    )
+
+    assert len(profile.chunk_generate_sec) == len(calls)
+    assert all(t >= 0 for t in profile.chunk_generate_sec)
+    assert profile.write_sec >= 0
+    assert profile.postprocess_sec == 0.0  # disabled in this test
+    assert profile.audio_duration_sec > 0

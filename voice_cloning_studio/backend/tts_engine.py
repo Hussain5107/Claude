@@ -22,11 +22,13 @@ from chatterbox.mtl_tts import ChatterboxMultilingualTTS, Conditionals
 from .config import settings
 from .exceptions import VoiceProcessingError
 from .logging_config import get_logger
+from .profiling import stage_timer
 
 logger = get_logger(__name__)
 
 _model: ChatterboxMultilingualTTS | None = None
 _model_lock = threading.Lock()
+_last_model_load_seconds: float = 0.0
 
 _ALIGNMENT_LOGGER_NAME = "chatterbox.models.t3.inference.alignment_stream_analyzer"
 
@@ -66,23 +68,37 @@ def get_model() -> ChatterboxMultilingualTTS:
     Thread-safe: generation jobs run on a background worker thread, so two
     requests racing to trigger the (slow) first load must not both start it.
     """
-    global _model
+    global _model, _last_model_load_seconds
     if _model is not None:
         return _model
 
     with _model_lock:
         if _model is None:
             device = get_device()
+            # Both thread settings must be set before any parallel work starts
+            # (PyTorch raises if set_num_interop_threads is called twice or
+            # after work has begun) -- the singleton lock guarantees this
+            # whole block runs exactly once per process.
             torch.set_num_threads(settings.torch_num_threads)
-            logger.info("Loading Chatterbox Multilingual on device=%s (torch_num_threads=%d)...",
-                        device, settings.torch_num_threads)
+            torch.set_num_interop_threads(settings.torch_num_interop_threads)
+            logger.info(
+                "Loading Chatterbox Multilingual on device=%s (intra-op threads=%d, inter-op threads=%d)...",
+                device, settings.torch_num_threads, settings.torch_num_interop_threads,
+            )
             try:
-                _model = ChatterboxMultilingualTTS.from_pretrained(device=device)
+                with stage_timer() as t:
+                    _model = ChatterboxMultilingualTTS.from_pretrained(device=device)
             except Exception as e:
                 logger.exception("Failed to load Chatterbox model")
                 raise VoiceProcessingError(e) from e
-            logger.info("Model loaded.")
+            _last_model_load_seconds = t["elapsed"]
+            logger.info("Model loaded in %.2fs.", _last_model_load_seconds)
     return _model
+
+
+def get_last_model_load_seconds() -> float:
+    """Wall-clock time the most recent (first) model load took, 0.0 if not loaded yet."""
+    return _last_model_load_seconds
 
 
 def get_supported_languages() -> dict:

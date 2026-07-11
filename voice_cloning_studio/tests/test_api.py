@@ -121,20 +121,17 @@ def test_generate_speech_empty_text(client):
 def test_generate_speech_full_job_flow(client, monkeypatch):
     voice_id = _upload_voice(client, name="frank").json()["id"]
 
-    def fake_generate_long_form(text, embedding_path, **kwargs):
+    def fake_generate_long_form(text, embedding_path, out_path, **kwargs):
         on_progress = kwargs.get("on_progress")
         if on_progress:
             on_progress(1, 1)
-        return "fake-samples", 16000, [audio_utils.CaptionCue(0.0, 1.0, text)]
-
-    def fake_save_wav(samples, sample_rate, path):
-        path.write_bytes(b"RIFF-fake-wav-content")
+        out_path.write_bytes(b"RIFF-fake-wav-content")
+        return [audio_utils.CaptionCue(0.0, 1.0, text)]
 
     def fake_write_srt(cues, path):
         path.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello world.\n")
 
     monkeypatch.setattr(audio_utils, "generate_long_form", fake_generate_long_form)
-    monkeypatch.setattr(audio_utils, "save_wav", fake_save_wav)
     monkeypatch.setattr(audio_utils, "write_srt", fake_write_srt)
 
     resp = client.post("/generate-speech", data={"text": "Hello world.", "voice_id": voice_id})
@@ -177,12 +174,12 @@ def test_job_not_found(client):
 def test_captions_not_ready_before_job_done(client, monkeypatch):
     voice_id = _upload_voice(client, name="hank").json()["id"]
 
-    def slow_generate_long_form(*args, **kwargs):
+    def slow_generate_long_form(text, embedding_path, out_path, **kwargs):
         time.sleep(0.5)
-        return "fake-samples", 16000, []
+        out_path.write_bytes(b"x")
+        return []
 
     monkeypatch.setattr(audio_utils, "generate_long_form", slow_generate_long_form)
-    monkeypatch.setattr(audio_utils, "save_wav", lambda *a, **k: None)
     monkeypatch.setattr(audio_utils, "write_srt", lambda *a, **k: None)
 
     resp = client.post("/generate-speech", data={"text": "Hello world.", "voice_id": voice_id})
