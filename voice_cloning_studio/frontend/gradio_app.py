@@ -22,6 +22,7 @@ LANGUAGES = {
     "Danish": "da", "Finnish": "fi", "Greek": "el", "Hebrew": "he",
     "Malay": "ms", "Norwegian": "no", "Swahili": "sw",
 }
+LANGUAGE_LABEL_BY_CODE = {code: label for label, code in LANGUAGES.items()}
 
 ACTIVE_JOB_STATUSES = ("queued", "running")
 
@@ -47,6 +48,52 @@ def _voice_label_for_id(voice_id) -> str:
         if vid == voice_id:
             return label
     return f"voice #{voice_id}"
+
+
+def fetch_voice_defaults(voice_id):
+    """Returns (exaggeration, cfg_weight, language_label) for a voice, or None if unset/unavailable."""
+    if voice_id is None:
+        return None
+    try:
+        resp = requests.get(f"{API_BASE}/voices/{voice_id}", timeout=10)
+        resp.raise_for_status()
+    except requests.RequestException:
+        return None
+
+    voice = resp.json()
+    if voice.get("default_exaggeration") is None:
+        return None
+    language_label = LANGUAGE_LABEL_BY_CODE.get(voice.get("default_language"), "English")
+    return voice["default_exaggeration"], voice["default_cfg_weight"], language_label
+
+
+def apply_voice_defaults(voice_id, current_exaggeration, current_cfg, current_language):
+    """Dropdown .change() handler -- autofills sliders/language if this voice has saved defaults."""
+    defaults = fetch_voice_defaults(voice_id)
+    if defaults is None:
+        return current_exaggeration, current_cfg, current_language
+    exaggeration, cfg_weight, language_label = defaults
+    return exaggeration, cfg_weight, language_label
+
+
+def save_voice_defaults(voice_id, exaggeration, cfg_weight, language_label):
+    if voice_id is None:
+        return "Pick a voice first."
+    try:
+        resp = requests.patch(
+            f"{API_BASE}/voices/{voice_id}/defaults",
+            json={
+                "exaggeration": exaggeration,
+                "cfg_weight": cfg_weight,
+                "language": LANGUAGES.get(language_label, "en"),
+            },
+            timeout=10,
+        )
+    except requests.RequestException as e:
+        return f"Could not reach backend: {e}"
+    if resp.status_code != 200:
+        return f"Error: {_error_detail(resp)}"
+    return f"Saved as default settings for {_voice_label_for_id(voice_id)}."
 
 
 def clone_voice(audio_path, name):
@@ -119,6 +166,12 @@ def _download_job(job_id: str, out_path: str) -> None:
     Path(out_path).write_bytes(resp.content)
 
 
+def _download_captions(job_id: str, out_path: str) -> None:
+    resp = requests.get(f"{API_BASE}/jobs/{job_id}/captions", timeout=30)
+    resp.raise_for_status()
+    Path(out_path).write_bytes(resp.content)
+
+
 # --- Test Voice tab: fast single-shot preview to tune exaggeration/pace ---
 
 def test_voice_generate(text, voice_id, language_label, exaggeration, cfg_weight, progress=gr.Progress()):
@@ -166,7 +219,7 @@ def test_voice_generate(text, voice_id, language_label, exaggeration, cfg_weight
     progress(1.0, desc="Done")
     yield (
         "test_voice_preview.wav",
-        "Done. Like it? Use 'Copy these settings' in Generate Speech. Otherwise adjust and test again.",
+        "Done. Like it? Use 'Save as default' below, or 'Copy from Test Voice' in Generate Speech.",
     )
 
 
@@ -181,6 +234,12 @@ def _queue_table(queue: list[dict]) -> list[list]:
             f"{item['est_minutes']:.1f} min", item["status"], pct,
         ])
     return rows
+
+
+def _renumber(queue: list[dict]) -> list[dict]:
+    for i, item in enumerate(queue, start=1):
+        item["n"] = i
+    return queue
 
 
 def add_to_queue(text, voice_id, language_label, exaggeration, cfg_weight, queue):
@@ -207,6 +266,7 @@ def add_to_queue(text, voice_id, language_label, exaggeration, cfg_weight, queue
         "chunks_done": 0,
         "chunks_total": 0,
         "result_path": None,
+        "captions_path": None,
     }
     queue.append(item)
     msg = f"Added #{item['n']} ({voice_label}, {words} words, ~{item['est_minutes']:.1f} min) to the queue."
@@ -220,6 +280,36 @@ def remove_last(queue):
 
 def clear_queue():
     return [], [], "Queue cleared."
+
+
+def move_item(index, direction, queue):
+    queue = list(queue or [])
+    idx = int(index) - 1 if index is not None else -1
+    other = idx + direction
+    if not (0 <= idx < len(queue)) or not (0 <= other < len(queue)):
+        return queue, _queue_table(queue), "Can't move that item further in that direction."
+    queue[idx], queue[other] = queue[other], queue[idx]
+    queue = _renumber(queue)
+    return queue, _queue_table(queue), f"Moved item {index} {'up' if direction < 0 else 'down'}."
+
+
+def load_item_for_editing(index, queue):
+    queue = list(queue or [])
+    idx = int(index) - 1 if index is not None else -1
+    if not (0 <= idx < len(queue)):
+        no_change = gr.update()
+        return (
+            queue, _queue_table(queue), "Invalid item number.",
+            no_change, no_change, no_change, no_change, no_change,
+        )
+
+    item = queue.pop(idx)
+    queue = _renumber(queue)
+    msg = f"Loaded item #{index} into the form -- click 'Add to queue' to re-add it (it'll go to the end)."
+    return (
+        queue, _queue_table(queue), msg,
+        item["text"], item["voice_id"], item["language_label"], item["exaggeration"], item["cfg_weight"],
+    )
 
 
 def generate_all(queue, progress=gr.Progress()):
@@ -259,13 +349,21 @@ def generate_all(queue, progress=gr.Progress()):
                 item["status"] = "done"
                 if not item["result_path"]:
                     safe_voice = item["voice_label"].replace(" ", "_")
-                    out_path = f"queue_{item['n']}_{safe_voice}.wav"
+                    audio_path = f"queue_{item['n']}_{safe_voice}.wav"
                     try:
-                        _download_job(item["job_id"], out_path)
-                        item["result_path"] = out_path
-                        completed_files.append(out_path)
+                        _download_job(item["job_id"], audio_path)
+                        item["result_path"] = audio_path
+                        completed_files.append(audio_path)
                     except requests.RequestException:
                         pass
+                    if job.get("has_captions"):
+                        captions_path = f"queue_{item['n']}_{safe_voice}.srt"
+                        try:
+                            _download_captions(item["job_id"], captions_path)
+                            item["captions_path"] = captions_path
+                            completed_files.append(captions_path)
+                        except requests.RequestException:
+                            pass
             else:
                 item["status"] = job["status"]
 
@@ -306,7 +404,8 @@ with gr.Blocks(title="Zahra Studio") as demo:
     with gr.Tab("Test Voice"):
         gr.Markdown(
             "Tune **exaggeration** and **pace/stability** on a short sentence first -- "
-            "much faster than waiting on a full script to find out the settings are off."
+            "much faster than waiting on a full script to find out the settings are off. "
+            "Picking a voice with saved defaults auto-fills its last-saved settings."
         )
         test_voice_dropdown = gr.Dropdown(label="Voice", choices=fetch_voice_choices())
         test_lang_dropdown = gr.Dropdown(label="Language", choices=list(LANGUAGES.keys()), value="English")
@@ -316,17 +415,19 @@ with gr.Blocks(title="Zahra Studio") as demo:
         test_btn = gr.Button("Generate test")
         test_audio_out = gr.Audio(label="Preview", type="filepath")
         test_status = gr.Textbox(label="Status", interactive=False)
+        save_defaults_btn = gr.Button("Save these as default settings for this voice")
 
     with gr.Tab("Generate Speech"):
         gr.Markdown(
             "Add one or more (voice, script) items to the queue, then **Generate All** -- "
             "voices are rendered one at a time on the backend (the model can only do one "
             "generation at once), but you can queue everything up front instead of "
-            "waiting for each one before starting the next."
+            "waiting for each one before starting the next. Each finished item includes "
+            "an auto-generated `.srt` caption file alongside the audio."
         )
         gr.Markdown(
             "Already found good settings in **Test Voice**? Use *Copy from Test Voice* below "
-            "instead of resetting the sliders."
+            "instead of resetting the sliders. Picking a voice with saved defaults auto-fills them too."
         )
         copy_from_test_btn = gr.Button("Copy voice + settings from Test Voice")
 
@@ -351,8 +452,14 @@ with gr.Blocks(title="Zahra Studio") as demo:
         )
         queue_status = gr.Textbox(label="Status", interactive=False)
 
+        with gr.Row():
+            edit_index = gr.Number(label="Item #", precision=0, minimum=1)
+            move_up_btn = gr.Button("Move up")
+            move_down_btn = gr.Button("Move down")
+            load_edit_btn = gr.Button("Load for editing")
+
         generate_all_btn = gr.Button("Generate All", variant="primary")
-        results_files = gr.Files(label="Completed audio files")
+        results_files = gr.Files(label="Completed files (audio + captions)")
 
     # -- Clone / delete voice wiring --
     clone_btn.click(clone_voice, inputs=[audio_in, name_in], outputs=[clone_status, voice_dropdown]).then(
@@ -369,10 +476,20 @@ with gr.Blocks(title="Zahra Studio") as demo:
     )
 
     # -- Test Voice wiring --
+    test_voice_dropdown.change(
+        apply_voice_defaults,
+        inputs=[test_voice_dropdown, test_exaggeration, test_cfg, test_lang_dropdown],
+        outputs=[test_exaggeration, test_cfg, test_lang_dropdown],
+    )
     test_btn.click(
         test_voice_generate,
         inputs=[test_text, test_voice_dropdown, test_lang_dropdown, test_exaggeration, test_cfg],
         outputs=[test_audio_out, test_status],
+    )
+    save_defaults_btn.click(
+        save_voice_defaults,
+        inputs=[test_voice_dropdown, test_exaggeration, test_cfg, test_lang_dropdown],
+        outputs=[test_status],
     )
     copy_from_test_btn.click(
         lambda v, lg, ex, cfg: (v, lg, ex, cfg),
@@ -381,6 +498,11 @@ with gr.Blocks(title="Zahra Studio") as demo:
     )
 
     # -- Generate Speech queue wiring --
+    voice_dropdown.change(
+        apply_voice_defaults,
+        inputs=[voice_dropdown, exaggeration_slider, cfg_slider, lang_dropdown],
+        outputs=[exaggeration_slider, cfg_slider, lang_dropdown],
+    )
     text_in.change(estimate_duration, inputs=[text_in], outputs=[duration_estimate])
     add_btn.click(
         add_to_queue,
@@ -389,6 +511,22 @@ with gr.Blocks(title="Zahra Studio") as demo:
     )
     remove_btn.click(remove_last, inputs=[queue_state], outputs=[queue_state, queue_table, queue_status])
     clear_btn.click(clear_queue, outputs=[queue_state, queue_table, queue_status])
+    move_up_btn.click(
+        lambda idx, q: move_item(idx, -1, q),
+        inputs=[edit_index, queue_state],
+        outputs=[queue_state, queue_table, queue_status],
+    )
+    move_down_btn.click(
+        lambda idx, q: move_item(idx, 1, q),
+        inputs=[edit_index, queue_state],
+        outputs=[queue_state, queue_table, queue_status],
+    )
+    load_edit_btn.click(
+        load_item_for_editing,
+        inputs=[edit_index, queue_state],
+        outputs=[queue_state, queue_table, queue_status, text_in, voice_dropdown, lang_dropdown,
+                 exaggeration_slider, cfg_slider],
+    )
     generate_all_btn.click(
         generate_all,
         inputs=[queue_state],

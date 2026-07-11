@@ -12,6 +12,8 @@ script in many chunks should load it once per job with ``load_conditionals``
 and reuse it via ``generate_chunk``, rather than reloading per chunk.
 """
 
+import contextlib
+import logging
 import threading
 
 import torch
@@ -25,6 +27,31 @@ logger = get_logger(__name__)
 
 _model: ChatterboxMultilingualTTS | None = None
 _model_lock = threading.Lock()
+
+_ALIGNMENT_LOGGER_NAME = "chatterbox.models.t3.inference.alignment_stream_analyzer"
+
+
+class _RepetitionCutoffDetector(logging.Handler):
+    """Watches for Chatterbox's own repetition-safety log line during one generate() call."""
+
+    def __init__(self):
+        super().__init__()
+        self.triggered = False
+
+    def emit(self, record: logging.LogRecord) -> None:
+        if "forcing EOS token" in record.getMessage():
+            self.triggered = True
+
+
+@contextlib.contextmanager
+def _watch_for_repetition_cutoff():
+    detector = _RepetitionCutoffDetector()
+    target = logging.getLogger(_ALIGNMENT_LOGGER_NAME)
+    target.addHandler(detector)
+    try:
+        yield detector
+    finally:
+        target.removeHandler(detector)
 
 
 def get_device() -> str:
@@ -81,23 +108,43 @@ def load_conditionals(embedding_path: str) -> Conditionals:
         raise VoiceProcessingError(e) from e
 
 
-def generate_chunk(
-    text: str,
-    conditionals: Conditionals,
-    language_id: str = "en",
-    exaggeration: float = 0.5,
-    cfg_weight: float = 0.5,
-) -> tuple[torch.Tensor, int]:
-    model = get_model()
-    model.conds = conditionals
-    try:
+def _generate_once(model, text, language_id, exaggeration, cfg_weight) -> tuple[torch.Tensor, bool]:
+    with _watch_for_repetition_cutoff() as detector:
         wav = model.generate(
             text,
             language_id=language_id,
             exaggeration=exaggeration,
             cfg_weight=cfg_weight,
         )
+    return wav.squeeze(0), detector.triggered
+
+
+def generate_chunk(
+    text: str,
+    conditionals: Conditionals,
+    language_id: str = "en",
+    exaggeration: float = 0.5,
+    cfg_weight: float = 0.5,
+) -> tuple[torch.Tensor, int, bool]:
+    """Generates one chunk, auto-retrying (up to ``max_chunk_retries`` times) if
+    Chatterbox's own repetition-safety mechanism cut the result short -- sampling
+    is stochastic, so a retry often produces a clean, complete result.
+
+    Returns (audio, sample_rate, still_truncated_after_retries).
+    """
+    model = get_model()
+    model.conds = conditionals
+    try:
+        wav, truncated = _generate_once(model, text, language_id, exaggeration, cfg_weight)
+        attempts = 1
+        while truncated and attempts <= settings.max_chunk_retries:
+            logger.info("Chunk hit repetition cutoff, retrying (attempt %d)...", attempts + 1)
+            wav, truncated = _generate_once(model, text, language_id, exaggeration, cfg_weight)
+            attempts += 1
     except Exception as e:
         logger.exception("Generation failed for chunk (len=%d chars)", len(text))
         raise VoiceProcessingError(e) from e
-    return wav.squeeze(0), model.sr
+
+    if truncated:
+        logger.warning("Chunk still truncated after %d attempt(s), keeping best result", attempts)
+    return wav, model.sr, truncated

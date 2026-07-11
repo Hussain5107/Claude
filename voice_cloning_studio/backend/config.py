@@ -79,6 +79,19 @@ class Settings:
     # Job retention
     job_retention_seconds: int = field(default_factory=lambda: _env_int("JOB_RETENTION_SECONDS", 3600))
 
+    # Quality: auto-retry a chunk if Chatterbox's own repetition-safety cuts it short
+    max_chunk_retries: int = field(default_factory=lambda: _env_int("MAX_CHUNK_RETRIES", 1))
+
+    # Post-processing applied to the final stitched audio
+    enable_loudness_normalization: bool = field(
+        default_factory=lambda: _env_bool("ENABLE_LOUDNESS_NORMALIZATION", True)
+    )
+    target_lufs: float = field(default_factory=lambda: _env_float("TARGET_LUFS", -19.0))
+    enable_silence_trim: bool = field(default_factory=lambda: _env_bool("ENABLE_SILENCE_TRIM", True))
+    silence_trim_threshold_db: float = field(
+        default_factory=lambda: _env_float("SILENCE_TRIM_THRESHOLD_DB", -50.0)
+    )
+
 
 settings = Settings()
 settings.voices_dir.mkdir(exist_ok=True)

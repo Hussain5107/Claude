@@ -37,6 +37,7 @@ class Job:
     chunks_done: int = 0
     chunks_total: int = 0
     result_path: Path | None = None
+    captions_path: Path | None = None
     error: str | None = None
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
@@ -48,7 +49,9 @@ class JobManager:
         self._lock = threading.Lock()
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="tts-worker")
 
-    def submit(self, work: Callable[[Callable[[int, int], None]], Path]) -> str:
+    def submit(self, work: Callable[[Callable[[int, int], None]], tuple[Path, Path | None]]) -> str:
+        """``work`` receives an on_progress(done, total) callback and returns
+        (audio_path, captions_path_or_None)."""
         job_id = uuid.uuid4().hex
         job = Job(id=job_id)
         with self._lock:
@@ -66,7 +69,7 @@ class JobManager:
                 job.updated_at = time.time()
             logger.info("Job %s started", job_id)
             try:
-                result_path = work(on_progress)
+                result_path, captions_path = work(on_progress)
             except Exception as e:
                 logger.exception("Job %s failed", job_id)
                 with self._lock:
@@ -77,6 +80,7 @@ class JobManager:
             with self._lock:
                 job.status = JobStatus.DONE
                 job.result_path = result_path
+                job.captions_path = captions_path
                 job.updated_at = time.time()
             logger.info("Job %s finished", job_id)
 
@@ -98,6 +102,8 @@ class JobManager:
             for job in expired:
                 if job.result_path and job.result_path.exists():
                     job.result_path.unlink(missing_ok=True)
+                if job.captions_path and job.captions_path.exists():
+                    job.captions_path.unlink(missing_ok=True)
                 del self._jobs[job.id]
         if expired:
             logger.info("Swept %d expired job(s)", len(expired))

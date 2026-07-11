@@ -22,8 +22,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dev dependencies (no torch/chatterbox - those are mocked in tests)
-        run: pip install pytest httpx ruff fastapi python-multipart gradio requests
+      - name: Install torch/torchaudio (CPU-only wheels -- only chatterbox itself is mocked in tests)
+        run: pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install remaining dev dependencies
+        run: pip install pytest httpx ruff fastapi python-multipart gradio requests numpy pyloudnorm
 
       - name: Lint
         run: ruff check .

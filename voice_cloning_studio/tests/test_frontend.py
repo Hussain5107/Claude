@@ -89,3 +89,84 @@ def test_queue_table_shows_progress_percentage():
     }]
     table = gradio_app._queue_table(queue)
     assert table == [[1, "Bob", 10, "0.1 min", "running", "50%"]]
+
+
+def test_move_item_up():
+    queue = [_fake_item(1), _fake_item(2)]
+    queue[0]["voice_label"], queue[1]["voice_label"] = "First", "Second"
+    queue, table, msg = gradio_app.move_item(2, -1, queue)
+    assert [item["voice_label"] for item in queue] == ["Second", "First"]
+    assert [item["n"] for item in queue] == [1, 2]
+
+
+def test_move_item_down():
+    queue = [_fake_item(1), _fake_item(2)]
+    queue[0]["voice_label"], queue[1]["voice_label"] = "First", "Second"
+    queue, table, msg = gradio_app.move_item(1, 1, queue)
+    assert [item["voice_label"] for item in queue] == ["Second", "First"]
+
+
+def test_move_item_out_of_range_is_noop():
+    queue = [_fake_item(1), _fake_item(2)]
+    queue, table, msg = gradio_app.move_item(1, -1, queue)  # can't move first item up
+    assert [item["n"] for item in queue] == [1, 2]
+    assert "Can't move" in msg
+
+
+def test_load_item_for_editing_removes_and_renumbers(monkeypatch):
+    monkeypatch.setattr(gradio_app, "_voice_label_for_id", lambda vid: "Alice")
+    queue, *_ = gradio_app.add_to_queue("first text", 1, "English", 0.6, 0.4, [])
+    queue, *_ = gradio_app.add_to_queue("second text", 1, "English", 0.5, 0.5, queue)
+
+    queue, table, msg, text, voice_id, lang, exag, cfg = gradio_app.load_item_for_editing(1, queue)
+
+    assert text == "first text"
+    assert voice_id == 1
+    assert exag == 0.6
+    assert cfg == 0.4
+    assert [item["n"] for item in queue] == [1]  # remaining item renumbered
+    assert queue[0]["text"] == "second text"
+
+
+def test_load_item_for_editing_invalid_index():
+    result = gradio_app.load_item_for_editing(5, [_fake_item(1)])
+    queue, msg = result[0], result[2]
+    assert len(queue) == 1
+    assert "Invalid item number" in msg
+
+
+def test_fetch_voice_defaults_returns_none_when_unset(monkeypatch):
+    class FakeResp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"default_exaggeration": None}
+
+    monkeypatch.setattr(gradio_app.requests, "get", lambda *a, **k: FakeResp())
+    assert gradio_app.fetch_voice_defaults(1) is None
+
+
+def test_fetch_voice_defaults_returns_saved_values(monkeypatch):
+    class FakeResp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"default_exaggeration": 0.7, "default_cfg_weight": 0.3, "default_language": "fr"}
+
+    monkeypatch.setattr(gradio_app.requests, "get", lambda *a, **k: FakeResp())
+    result = gradio_app.fetch_voice_defaults(1)
+    assert result == (0.7, 0.3, "French")
+
+
+def test_apply_voice_defaults_falls_back_when_none(monkeypatch):
+    monkeypatch.setattr(gradio_app, "fetch_voice_defaults", lambda vid: None)
+    result = gradio_app.apply_voice_defaults(1, 0.5, 0.5, "English")
+    assert result == (0.5, 0.5, "English")
+
+
+def test_apply_voice_defaults_uses_saved_values(monkeypatch):
+    monkeypatch.setattr(gradio_app, "fetch_voice_defaults", lambda vid: (0.8, 0.2, "German"))
+    result = gradio_app.apply_voice_defaults(1, 0.5, 0.5, "English")
+    assert result == (0.8, 0.2, "German")

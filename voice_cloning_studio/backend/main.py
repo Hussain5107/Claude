@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel
 
 from . import audio_utils, database, tts_engine
 from .config import settings
@@ -113,6 +114,14 @@ async def get_voices():
     return database.list_voices()
 
 
+@app.get("/voices/{voice_id}")
+async def get_voice(voice_id: int):
+    voice = database.get_voice(voice_id)
+    if not voice:
+        raise VoiceNotFoundError(f"Voice {voice_id} not found")
+    return voice
+
+
 @app.delete("/voices/{voice_id}")
 async def remove_voice(voice_id: int):
     voice = database.get_voice(voice_id)
@@ -124,6 +133,23 @@ async def remove_voice(voice_id: int):
     database.delete_voice(voice_id)
     logger.info("Deleted voice id=%d (%s)", voice_id, voice["name"])
     return {"deleted": voice_id}
+
+
+class VoiceDefaults(BaseModel):
+    exaggeration: float
+    cfg_weight: float
+    language: str
+
+
+@app.patch("/voices/{voice_id}/defaults")
+async def set_voice_defaults(voice_id: int, defaults: VoiceDefaults):
+    voice = database.get_voice(voice_id)
+    if not voice:
+        raise VoiceNotFoundError(f"Voice {voice_id} not found")
+
+    database.update_voice_defaults(voice_id, defaults.exaggeration, defaults.cfg_weight, defaults.language)
+    logger.info("Updated defaults for voice id=%d", voice_id)
+    return database.get_voice(voice_id)
 
 
 @app.get("/languages")
@@ -155,10 +181,12 @@ async def generate_speech(
     exaggeration = settings.default_exaggeration if exaggeration is None else exaggeration
     cfg_weight = settings.default_cfg_weight if cfg_weight is None else cfg_weight
 
-    out_path = settings.output_dir / f"{uuid.uuid4().hex}.wav"
+    job_uuid = uuid.uuid4().hex
+    out_path = settings.output_dir / f"{job_uuid}.wav"
+    captions_path = settings.output_dir / f"{job_uuid}.srt"
 
     def work(on_progress):
-        samples, sample_rate = audio_utils.generate_long_form(
+        samples, sample_rate, cues = audio_utils.generate_long_form(
             text,
             voice["embedding_path"],
             language_id=language,
@@ -167,7 +195,8 @@ async def generate_speech(
             on_progress=on_progress,
         )
         audio_utils.save_wav(samples, sample_rate, out_path)
-        return out_path
+        audio_utils.write_srt(cues, captions_path)
+        return out_path, captions_path
 
     job_id = job_manager.submit(work)
     logger.info("Queued generation job %s for voice_id=%d (%d chars)", job_id, voice_id, len(text))
@@ -185,6 +214,7 @@ async def get_job(job_id: str):
         "chunks_done": job.chunks_done,
         "chunks_total": job.chunks_total,
         "error": job.error,
+        "has_captions": job.captions_path is not None,
     }
 
 
@@ -196,3 +226,15 @@ async def download_job(job_id: str):
     if job.status != JobStatus.DONE:
         raise HTTPException(409, f"Job is not finished yet (status={job.status})")
     return FileResponse(job.result_path, media_type="audio/wav", filename=job.result_path.name)
+
+
+@app.get("/jobs/{job_id}/captions")
+async def download_captions(job_id: str):
+    job = job_manager.get(job_id)
+    if not job:
+        raise JobNotFoundError(f"Job {job_id} not found")
+    if job.status != JobStatus.DONE:
+        raise HTTPException(409, f"Job is not finished yet (status={job.status})")
+    if not job.captions_path:
+        raise HTTPException(404, "No captions available for this job")
+    return FileResponse(job.captions_path, media_type="text/plain", filename=job.captions_path.name)

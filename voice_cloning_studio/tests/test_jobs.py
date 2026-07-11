@@ -6,20 +6,39 @@ from backend.jobs import JobManager, JobStatus
 def test_job_completes_successfully(tmp_path):
     manager = JobManager()
     result_path = tmp_path / "out.wav"
+    captions_path = tmp_path / "out.srt"
 
     def work(on_progress):
         on_progress(1, 2)
         on_progress(2, 2)
         result_path.write_bytes(b"fake audio")
-        return result_path
+        captions_path.write_text("1\n00:00:00,000 --> 00:00:01,000\nhi\n")
+        return result_path, captions_path
 
     job_id = manager.submit(work)
     job = _wait_for_terminal(manager, job_id)
 
     assert job.status == JobStatus.DONE
     assert job.result_path == result_path
+    assert job.captions_path == captions_path
     assert job.chunks_done == 2
     assert job.chunks_total == 2
+
+
+def test_job_works_without_captions(tmp_path):
+    manager = JobManager()
+    result_path = tmp_path / "out.wav"
+
+    def work(on_progress):
+        result_path.write_bytes(b"fake audio")
+        return result_path, None
+
+    job_id = manager.submit(work)
+    job = _wait_for_terminal(manager, job_id)
+
+    assert job.status == JobStatus.DONE
+    assert job.result_path == result_path
+    assert job.captions_path is None
 
 
 def test_job_records_failure():
@@ -46,10 +65,12 @@ def test_sweep_expired_removes_old_finished_jobs(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "job_retention_seconds", 0)
     manager = JobManager()
     result_path = tmp_path / "out.wav"
+    captions_path = tmp_path / "out.srt"
 
     def work(on_progress):
         result_path.write_bytes(b"x")
-        return result_path
+        captions_path.write_text("x")
+        return result_path, captions_path
 
     job_id = manager.submit(work)
     _wait_for_terminal(manager, job_id)
@@ -59,6 +80,7 @@ def test_sweep_expired_removes_old_finished_jobs(tmp_path, monkeypatch):
 
     assert manager.get(job_id) is None
     assert not result_path.exists()
+    assert not captions_path.exists()
 
 
 def _wait_for_terminal(manager: JobManager, job_id: str, timeout: float = 5.0):

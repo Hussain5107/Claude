@@ -7,6 +7,12 @@ from .logging_config import get_logger
 
 logger = get_logger(__name__)
 
+_DEFAULT_COLUMNS = {
+    "default_exaggeration": "REAL",
+    "default_cfg_weight": "REAL",
+    "default_language": "TEXT",
+}
+
 
 @contextmanager
 def _connection():
@@ -32,6 +38,11 @@ def init_db() -> None:
             )
             """
         )
+        existing = {row["name"] for row in conn.execute("PRAGMA table_info(voices)")}
+        for column, sql_type in _DEFAULT_COLUMNS.items():
+            if column not in existing:
+                conn.execute(f"ALTER TABLE voices ADD COLUMN {column} {sql_type}")
+                logger.info("Migrated voices table: added column %s", column)
     logger.info("Database ready at %s", settings.db_path)
 
 
@@ -66,4 +77,14 @@ def get_voice_by_name(name: str) -> dict | None:
 def delete_voice(voice_id: int) -> bool:
     with _connection() as conn:
         cur = conn.execute("DELETE FROM voices WHERE id = ?", (voice_id,))
+        return cur.rowcount > 0
+
+
+def update_voice_defaults(voice_id: int, exaggeration: float, cfg_weight: float, language: str) -> bool:
+    with _connection() as conn:
+        cur = conn.execute(
+            "UPDATE voices SET default_exaggeration = ?, default_cfg_weight = ?, default_language = ? "
+            "WHERE id = ?",
+            (exaggeration, cfg_weight, language, voice_id),
+        )
         return cur.rowcount > 0

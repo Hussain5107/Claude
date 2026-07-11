@@ -103,17 +103,22 @@ the same tab.
 **Test Voice tab:** before committing to a full script, generate a short
 sentence (editable, a sensible default is prefilled) with a given
 exaggeration/pace setting to hear how it actually sounds — far faster than
-finding out 40 minutes into a full render that the settings are off. Once
-you're happy, use **"Copy voice + settings from Test Voice"** in Generate
-Speech instead of re-entering everything.
+finding out 40 minutes into a full render that the settings are off.
+Selecting a voice auto-fills its last-saved settings if you've saved any;
+**"Save these as default settings for this voice"** remembers them for next
+time. Once you're happy, use **"Copy voice + settings from Test Voice"** in
+Generate Speech instead of re-entering everything.
 
 **Generate Speech tab:** a queue, not a single one-shot generation. Add a
 script (per voice, with its own language/exaggeration/pace) to the queue —
 the box shows a live word count and estimated narrated duration as you type
 — repeat for as many voices/scripts as you want, then hit **Generate All**.
 The queue table shows live status and percentage progress per item as they
-render; completed files appear for download as soon as each one finishes,
-you don't have to wait for the whole batch.
+render; completed files (audio **and** an auto-generated `.srt` caption
+file) appear for download as soon as each one finishes, you don't have to
+wait for the whole batch. Use the **Item # / Move up / Move down / Load for
+editing** controls to reorder the queue or pull an item back into the form
+to change it before it's generated.
 
 Note on "multiple voices at once": the queue lets you *submit* many jobs
 without waiting on each one, but they still render one at a time under the
@@ -129,14 +134,20 @@ files instead of babysitting one generation at a time.
   `.wav .mp3 .m4a .flac .ogg .aac`, up to `MAX_UPLOAD_MB`). Returns the saved
   voice record.
 - `GET /voices` — list saved voices.
+- `GET /voices/{voice_id}` — a single voice record (includes
+  `default_exaggeration` / `default_cfg_weight` / `default_language` if set).
+- `PATCH /voices/{voice_id}/defaults` — JSON body `{exaggeration, cfg_weight,
+  language}`. Saves them as that voice's remembered settings.
 - `DELETE /voices/{voice_id}` — delete a saved voice and its files.
 - `GET /languages` — supported language codes/names.
 - `POST /generate-speech` — form fields `text`, `voice_id`, `language`
   (default from config), `exaggeration`, `cfg_weight` (defaults from config).
   Returns `202 {"job_id": "..."}`.
 - `GET /jobs/{job_id}` — `{"status": "queued"|"running"|"done"|"failed",
-  "chunks_done": N, "chunks_total": N, "error": "..." | null}`.
+  "chunks_done": N, "chunks_total": N, "error": "..." | null, "has_captions": bool}`.
 - `GET /jobs/{job_id}/download` — the finished `.wav` (409 if not done yet).
+- `GET /jobs/{job_id}/captions` — the auto-generated `.srt` captions for that
+  job (409 if not done yet, 404 if somehow unavailable).
 
 ## Development
 
@@ -146,27 +157,40 @@ pytest                                 # runs in seconds -- torch/chatterbox are
 ruff check .                           # lint
 ```
 
-Tests never load the real model or download weights: `tests/conftest.py`
-stubs `torch`/`torchaudio`/`chatterbox` in `sys.modules` before anything is
-imported, so the whole suite (chunking logic, job state machine, SQLite
-layer, full HTTP request/response contract, the Gradio queue logic) runs
-anywhere, including CI, using the real (lightweight) `gradio`/`requests`
-packages — see `.github/workflows/voice_cloning_studio-ci.yml`.
+Tests never download model weights or need a GPU: `tests/conftest.py` stubs
+only `chatterbox` in `sys.modules` (the part that needs several GB of
+weights) before anything is imported. `torch`/`torchaudio`/`numpy`/
+`pyloudnorm` are kept **real** (ordinary installs, no model download) so the
+audio post-processing logic (silence trimming, loudness normalization,
+caption timing) is tested against actual tensor/array math, not a mock —
+see `.github/workflows/voice_cloning_studio-ci.yml`.
+
+## Quality/output features
+
+- **Auto-retry on repetition cutoff:** Chatterbox has a built-in safety net
+  that force-stops a chunk early if it detects itself repeating a sound.
+  Sampling is stochastic, so `tts_engine.generate_chunk` now automatically
+  retries a truncated chunk (`MAX_CHUNK_RETRIES`, default 1) before giving up
+  and keeping the best available result.
+- **Post-processing:** the final stitched audio is loudness-normalized
+  (target `-19 LUFS` by default, tunable) and has leading/trailing silence
+  trimmed — both configurable/disable-able via `.env.example`.
+- **Captions:** every generation also produces a `.srt` file, timed from the
+  actual generated audio duration of each chunk (not guessed from text
+  length), so timing is accurate without needing a separate speech-to-text
+  pass.
 
 ## Known limitations
 
 - CPU-only generation is slow and proportional to script length; no built-in
   GPU rental/offload path yet.
-- A built-in Chatterbox safety mechanism occasionally cuts a chunk short if
-  it detects the model repeating itself — rare, but can produce a slightly
-  truncated sentence. Not yet auto-retried.
 - No authentication on the local API — it's meant for `localhost` only, don't
   expose it to a network without adding auth in front of it.
-- No audio post-processing (loudness normalization, silence trimming, MP3
-  export) — output is the raw model WAV.
+- The queue reorder/edit UI is intentionally simple (move up/down, load one
+  item back into the form) rather than drag-and-drop, which Gradio doesn't
+  support natively.
 
-See `PROJECT_BRIEF.md` (repo root) for the fuller build history and a longer
-roadmap of next-level ideas (auto-captions, GPU path, packaging, etc).
+See `PROJECT_BRIEF.md` (repo root) for the fuller build history and roadmap.
 
 ## License
 

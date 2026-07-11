@@ -83,6 +83,17 @@ def test_voices_list_includes_cloned_voice(client):
     assert "carol" in names
 
 
+def test_get_single_voice(client):
+    voice_id = _upload_voice(client, name="single").json()["id"]
+    resp = client.get(f"/voices/{voice_id}")
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "single"
+
+
+def test_get_single_voice_not_found(client):
+    assert client.get("/voices/999999").status_code == 404
+
+
 def test_delete_voice(client):
     voice_id = _upload_voice(client, name="dave").json()["id"]
 
@@ -114,13 +125,17 @@ def test_generate_speech_full_job_flow(client, monkeypatch):
         on_progress = kwargs.get("on_progress")
         if on_progress:
             on_progress(1, 1)
-        return "fake-samples", 16000
+        return "fake-samples", 16000, [audio_utils.CaptionCue(0.0, 1.0, text)]
 
     def fake_save_wav(samples, sample_rate, path):
         path.write_bytes(b"RIFF-fake-wav-content")
 
+    def fake_write_srt(cues, path):
+        path.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello world.\n")
+
     monkeypatch.setattr(audio_utils, "generate_long_form", fake_generate_long_form)
     monkeypatch.setattr(audio_utils, "save_wav", fake_save_wav)
+    monkeypatch.setattr(audio_utils, "write_srt", fake_write_srt)
 
     resp = client.post("/generate-speech", data={"text": "Hello world.", "voice_id": voice_id})
     assert resp.status_code == 202
@@ -128,10 +143,15 @@ def test_generate_speech_full_job_flow(client, monkeypatch):
 
     job = _poll_until_done(client, job_id)
     assert job["status"] == "done"
+    assert job["has_captions"] is True
 
     download = client.get(f"/jobs/{job_id}/download")
     assert download.status_code == 200
     assert download.content == b"RIFF-fake-wav-content"
+
+    captions = client.get(f"/jobs/{job_id}/captions")
+    assert captions.status_code == 200
+    assert b"Hello world." in captions.content
 
 
 def test_generate_speech_job_failure_reported(client, monkeypatch):
@@ -152,6 +172,48 @@ def test_generate_speech_job_failure_reported(client, monkeypatch):
 
 def test_job_not_found(client):
     assert client.get("/jobs/does-not-exist").status_code == 404
+
+
+def test_captions_not_ready_before_job_done(client, monkeypatch):
+    voice_id = _upload_voice(client, name="hank").json()["id"]
+
+    def slow_generate_long_form(*args, **kwargs):
+        time.sleep(0.5)
+        return "fake-samples", 16000, []
+
+    monkeypatch.setattr(audio_utils, "generate_long_form", slow_generate_long_form)
+    monkeypatch.setattr(audio_utils, "save_wav", lambda *a, **k: None)
+    monkeypatch.setattr(audio_utils, "write_srt", lambda *a, **k: None)
+
+    resp = client.post("/generate-speech", data={"text": "Hello world.", "voice_id": voice_id})
+    job_id = resp.json()["job_id"]
+    captions_resp = client.get(f"/jobs/{job_id}/captions")
+    assert captions_resp.status_code == 409
+
+    _poll_until_done(client, job_id)  # let it finish before the test tears down
+
+
+def test_set_and_read_voice_defaults(client):
+    voice_id = _upload_voice(client, name="ivy").json()["id"]
+
+    resp = client.patch(
+        f"/voices/{voice_id}/defaults",
+        json={"exaggeration": 0.7, "cfg_weight": 0.3, "language": "fr"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["default_exaggeration"] == 0.7
+    assert body["default_cfg_weight"] == 0.3
+    assert body["default_language"] == "fr"
+
+    voices = {v["name"]: v for v in client.get("/voices").json()}
+    assert voices["ivy"]["default_exaggeration"] == 0.7
+
+
+def test_set_voice_defaults_unknown_voice(client):
+    body = {"exaggeration": 0.5, "cfg_weight": 0.5, "language": "en"}
+    resp = client.patch("/voices/999999/defaults", json=body)
+    assert resp.status_code == 404
 
 
 def test_languages_endpoint(client, monkeypatch):
