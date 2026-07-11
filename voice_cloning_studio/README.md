@@ -1,4 +1,4 @@
-# Voice Cloning Studio
+# Zahra Studio
 
 A local voice-cloning text-to-speech app: FastAPI backend + SQLite for saved
 voices, Gradio frontend. Clone a voice from a short reference clip once, then
@@ -27,7 +27,8 @@ backend/
   audio_utils.py         text chunking + long-form generation orchestration
   jobs.py                 background job manager (generation runs off the request thread)
 frontend/
-  gradio_app.py          UI: clone/manage voices, generate speech, polls job progress
+  gradio_app.py          UI: clone/manage voices, test-tune settings, queue+batch generate
+  assets/logo.svg         Zahra Studio logo
 tests/                    pytest suite (torch/chatterbox mocked -- no GPU/heavy install needed)
 voices/                  saved reference clips + embeddings (created at runtime, git-ignored)
 output/                  generated audio files (created at runtime, git-ignored)
@@ -99,12 +100,28 @@ give it a name, click Save. This computes and stores the voice embedding
 the original clip on future generations. You can delete a saved voice from
 the same tab.
 
-**Generate Speech tab:** pick a saved voice, paste your script, choose a
-language, click Generate. Long scripts are automatically split into chunks
-internally (the underlying model can only generate a limited amount of audio
-per call) and stitched back into one WAV file — you always get a single
-downloadable file back regardless of script length, with live progress shown
-while it works.
+**Test Voice tab:** before committing to a full script, generate a short
+sentence (editable, a sensible default is prefilled) with a given
+exaggeration/pace setting to hear how it actually sounds — far faster than
+finding out 40 minutes into a full render that the settings are off. Once
+you're happy, use **"Copy voice + settings from Test Voice"** in Generate
+Speech instead of re-entering everything.
+
+**Generate Speech tab:** a queue, not a single one-shot generation. Add a
+script (per voice, with its own language/exaggeration/pace) to the queue —
+the box shows a live word count and estimated narrated duration as you type
+— repeat for as many voices/scripts as you want, then hit **Generate All**.
+The queue table shows live status and percentage progress per item as they
+render; completed files appear for download as soon as each one finishes,
+you don't have to wait for the whole batch.
+
+Note on "multiple voices at once": the queue lets you *submit* many jobs
+without waiting on each one, but they still render one at a time under the
+hood — the model isn't safe to call from two threads simultaneously, and
+running multiple full copies of it in parallel isn't realistic on a CPU-only
+machine anyway. The queue is what makes this not feel like a limitation:
+submit everything up front, walk away, come back to a folder of finished
+files instead of babysitting one generation at a time.
 
 ## API reference
 
@@ -132,8 +149,9 @@ ruff check .                           # lint
 Tests never load the real model or download weights: `tests/conftest.py`
 stubs `torch`/`torchaudio`/`chatterbox` in `sys.modules` before anything is
 imported, so the whole suite (chunking logic, job state machine, SQLite
-layer, full HTTP request/response contract) runs anywhere, including CI —
-see `.github/workflows/voice_cloning_studio-ci.yml`.
+layer, full HTTP request/response contract, the Gradio queue logic) runs
+anywhere, including CI, using the real (lightweight) `gradio`/`requests`
+packages — see `.github/workflows/voice_cloning_studio-ci.yml`.
 
 ## Known limitations
 

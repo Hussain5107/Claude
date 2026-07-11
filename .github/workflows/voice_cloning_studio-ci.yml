@@ -23,7 +23,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dev dependencies (no torch/chatterbox - those are mocked in tests)
-        run: pip install pytest httpx ruff fastapi python-multipart
+        run: pip install pytest httpx ruff fastapi python-multipart gradio requests
 
       - name: Lint
         run: ruff check .
