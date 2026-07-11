@@ -1,0 +1,4 @@
+voice_sample.*
+*.wav
+outputs/
+__pycache__/

@@ -42,3 +42,29 @@ Paste your script, pick a voice/speed, and click "Generate voice note". Output i
 exported as WAV file(s) (split into parts as it goes, so very long scripts don't blow up
 memory) with players and download buttons for each part.
 
+## Cloned Voice Studio (narrate in your own voice)
+
+`clone_server.py` + `cloned_voice_studio.html` narrate scripts in your own cloned voice,
+using [Chatterbox](https://github.com/resemble-ai/chatterbox) (Resemble AI, MIT licensed —
+free for commercial use, e.g. monetized YouTube). Only use a reference clip you have the
+right to clone (your own voice, or a voice you have explicit permission to use).
+
+**Setup:**
+
+```
+pip install -r requirements-clone.txt
+```
+
+This pulls in PyTorch and the model weights (several GB on first run). A GPU is strongly
+recommended — CPU works but is much slower, and for 30-60 minute scripts that difference
+is hours vs. minutes.
+
+1. Save a clean ~10-20 second solo clip of your voice as `voice_sample.mp3` in this folder
+   (or point `VOICE_SAMPLE` at a different path). This file is git-ignored — it never gets
+   committed.
+2. Run `python3 clone_server.py`.
+3. Open `http://localhost:5000`, click "Check server connection", paste your script, and
+   generate. Same chunked long-form workflow as Offline Voice Studio (WAV parts, players,
+   download buttons), but every chunk is synthesized in your cloned voice instead of a
+   stock voice.
+
