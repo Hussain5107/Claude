@@ -1,0 +1,32 @@
+name: voice_cloning_studio CI
+
+on:
+  push:
+    paths:
+      - "voice_cloning_studio/**"
+      - ".github/workflows/voice_cloning_studio-ci.yml"
+  pull_request:
+    paths:
+      - "voice_cloning_studio/**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: voice_cloning_studio
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dev dependencies (no torch/chatterbox - those are mocked in tests)
+        run: pip install pytest httpx ruff fastapi python-multipart
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Run tests
+        run: pytest -v

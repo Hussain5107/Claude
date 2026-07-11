@@ -1,62 +1,69 @@
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timezone
-from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent.parent / "voices.db"
+from .config import settings
+from .logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
-def get_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
+@contextmanager
+def _connection():
+    conn = sqlite3.connect(settings.db_path)
     conn.row_factory = sqlite3.Row
-    return conn
+    try:
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def init_db() -> None:
-    conn = get_connection()
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS voices (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL,
-            audio_path TEXT NOT NULL,
-            embedding_path TEXT NOT NULL,
-            created_at TEXT NOT NULL
+    with _connection() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS voices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                audio_path TEXT NOT NULL,
+                embedding_path TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
         )
-        """
-    )
-    conn.commit()
-    conn.close()
+    logger.info("Database ready at %s", settings.db_path)
 
 
 def insert_voice(name: str, audio_path: str, embedding_path: str) -> int:
-    conn = get_connection()
     created_at = datetime.now(timezone.utc).isoformat()
-    cur = conn.execute(
-        "INSERT INTO voices (name, audio_path, embedding_path, created_at) VALUES (?, ?, ?, ?)",
-        (name, audio_path, embedding_path, created_at),
-    )
-    conn.commit()
-    voice_id = cur.lastrowid
-    conn.close()
-    return voice_id
+    with _connection() as conn:
+        cur = conn.execute(
+            "INSERT INTO voices (name, audio_path, embedding_path, created_at) VALUES (?, ?, ?, ?)",
+            (name, audio_path, embedding_path, created_at),
+        )
+        return cur.lastrowid
 
 
 def list_voices() -> list[dict]:
-    conn = get_connection()
-    rows = conn.execute("SELECT * FROM voices ORDER BY created_at DESC").fetchall()
-    conn.close()
+    with _connection() as conn:
+        rows = conn.execute("SELECT * FROM voices ORDER BY created_at DESC").fetchall()
     return [dict(row) for row in rows]
 
 
 def get_voice(voice_id: int) -> dict | None:
-    conn = get_connection()
-    row = conn.execute("SELECT * FROM voices WHERE id = ?", (voice_id,)).fetchone()
-    conn.close()
+    with _connection() as conn:
+        row = conn.execute("SELECT * FROM voices WHERE id = ?", (voice_id,)).fetchone()
     return dict(row) if row else None
 
 
 def get_voice_by_name(name: str) -> dict | None:
-    conn = get_connection()
-    row = conn.execute("SELECT * FROM voices WHERE name = ?", (name,)).fetchone()
-    conn.close()
+    with _connection() as conn:
+        row = conn.execute("SELECT * FROM voices WHERE name = ?", (name,)).fetchone()
     return dict(row) if row else None
+
+
+def delete_voice(voice_id: int) -> bool:
+    with _connection() as conn:
+        cur = conn.execute("DELETE FROM voices WHERE id = ?", (voice_id,))
+        return cur.rowcount > 0

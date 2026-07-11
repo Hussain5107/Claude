@@ -5,3 +5,7 @@ venv/
 __pycache__/
 *.pyc
 last_generated.wav
+.env
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
