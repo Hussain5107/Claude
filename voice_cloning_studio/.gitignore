@@ -1,0 +1,7 @@
+voices/
+output/
+voices.db
+venv/
+__pycache__/
+*.pyc
+last_generated.wav
