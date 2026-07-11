@@ -29,7 +29,9 @@ backend/
 frontend/
   gradio_app.py          UI: clone/manage voices, test-tune settings, queue+batch generate
   assets/logo.svg         Zahra Studio logo
-tests/                    pytest suite (torch/chatterbox mocked -- no GPU/heavy install needed)
+mcp_server/
+  zahra_mcp.py           MCP bridge so Claude Desktop can write + narrate scripts directly
+tests/                    pytest suite (only chatterbox mocked -- no GPU/model download needed)
 voices/                  saved reference clips + embeddings (created at runtime, git-ignored)
 output/                  generated audio files (created at runtime, git-ignored)
 ```
@@ -127,6 +129,16 @@ running multiple full copies of it in parallel isn't realistic on a CPU-only
 machine anyway. The queue is what makes this not feel like a limitation:
 submit everything up front, walk away, come back to a folder of finished
 files instead of babysitting one generation at a time.
+
+## Claude Desktop integration
+
+`mcp_server/` is an MCP bridge so you can write a script *and* narrate it in
+one Claude Desktop conversation, instead of switching over to this app's UI
+to paste text in. It exposes the same backend API as MCP tools (list
+voices, clone a voice, submit/check/wait-for/download a narration). See
+`mcp_server/README.md` for setup (it's a one-time Claude Desktop config
+change). This only works with the Claude Desktop app — a browser-based
+Claude session can't reach a server running on your own machine.
 
 ## API reference
 
