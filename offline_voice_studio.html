@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Offline Voice Studio</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --border: #2a2e38; --text: #e8eaed;
+    --muted: #9aa0ac; --accent: #7c9eff; --accent-text: #0f1115; --danger: #ff6b6b;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f6f7f9; --panel: #ffffff; --border: #e1e4e9; --text: #1a1d23;
+      --muted: #5b6270; --accent: #4361ee; --accent-text: #ffffff; --danger: #d63939; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2rem 1.25rem 4rem; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex; justify-content: center;
+  }
+  .wrap { width: 100%; max-width: 760px; }
+  h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
+  .sub { color: var(--muted); margin: 0 0 1.5rem; font-size: .92rem; line-height: 1.5; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 1.25rem; margin-bottom: 1rem;
+  }
+  .card h2 { font-size: .95rem; margin: 0 0 .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  textarea {
+    width: 100%; min-height: 220px; resize: vertical; background: transparent;
+    color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+    padding: .75rem; font-size: .95rem; font-family: inherit; line-height: 1.5;
+  }
+  .row { display: flex; gap: .75rem; flex-wrap: wrap; align-items: center; }
+  .field { display: flex; flex-direction: column; gap: .35rem; flex: 1; min-width: 160px; }
+  label { font-size: .8rem; color: var(--muted); }
+  select, input[type=number] {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: .5rem .6rem; font-size: .9rem;
+  }
+  input[type=range] { width: 100%; }
+  .meta { display: flex; justify-content: space-between; color: var(--muted); font-size: .8rem; margin-top: .5rem; }
+  button {
+    background: var(--accent); color: var(--accent-text); border: none; border-radius: 8px;
+    padding: .65rem 1.1rem; font-size: .9rem; font-weight: 600; cursor: pointer;
+  }
+  button.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  button.danger { background: var(--danger); color: #fff; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .progress-track { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; height: 10px; overflow: hidden; margin-top: .5rem; }
+  .progress-fill { background: var(--accent); height: 100%; width: 0%; transition: width .2s; }
+  .status-line { font-size: .82rem; color: var(--muted); margin-top: .4rem; }
+  details summary { cursor: pointer; color: var(--muted); font-size: .85rem; }
+  .parts { display: flex; flex-direction: column; gap: .6rem; }
+  .part { border: 1px solid var(--border); border-radius: 8px; padding: .6rem .75rem; display: flex; flex-direction: column; gap: .4rem; }
+  .part-head { display: flex; justify-content: space-between; align-items: center; font-size: .85rem; }
+  audio { width: 100%; height: 32px; }
+  .error { color: var(--danger); font-size: .85rem; margin-top: .5rem; white-space: pre-wrap; }
+  code { background: var(--bg); border: 1px solid var(--border); padding: .1rem .35rem; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Offline Voice Studio</h1>
+  <p class="sub">
+    Paste your script, generate a natural voice narration entirely in your browser using the
+    open-source Kokoro neural voice model. The model downloads once (needs internet the first time)
+    and is cached by your browser for fully offline use after that. Long scripts are exported as
+    separate WAV parts as they finish, so you can start listening before the whole thing is done.
+  </p>
+
+  <div class="card">
+    <h2>Script</h2>
+    <textarea id="script" placeholder="Paste your script here..."></textarea>
+    <div class="meta">
+      <span id="wordCount">0 words</span>
+      <span id="estDuration">~0 min at current speed</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Voice</h2>
+    <div class="row">
+      <div class="field">
+        <label for="voice">Voice</label>
+        <select id="voice"></select>
+      </div>
+      <div class="field">
+        <label for="speed">Speed: <span id="speedVal">1.00x</span></label>
+        <input type="range" id="speed" min="0.7" max="1.3" step="0.05" value="1.0" />
+      </div>
+    </div>
+    <details style="margin-top:.75rem">
+      <summary>Advanced (quality / performance)</summary>
+      <div class="row" style="margin-top:.75rem">
+        <div class="field">
+          <label for="dtype">Model precision</label>
+          <select id="dtype">
+            <option value="q8" selected>Balanced (q8) — recommended</option>
+            <option value="fp32">Max quality (fp32) — larger download, slower</option>
+            <option value="q4">Fastest (q4) — lower quality</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="device">Compute backend</label>
+          <select id="device">
+            <option value="auto" selected>Auto (WebGPU if available)</option>
+            <option value="webgpu">Force WebGPU</option>
+            <option value="wasm">Force WASM (CPU)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="partMinutes">Minutes per exported file</label>
+          <input type="number" id="partMinutes" min="2" max="60" value="15" />
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2>Model</h2>
+    <button id="loadBtn">Load voice model</button>
+    <div class="progress-track"><div class="progress-fill" id="loadProgress"></div></div>
+    <div class="status-line" id="loadStatus">Not loaded yet. First load needs internet access.</div>
+  </div>
+
+  <div class="card">
+    <h2>Generate</h2>
+    <div class="row">
+      <button id="generateBtn" disabled>Generate voice note</button>
+      <button id="stopBtn" class="secondary" disabled>Stop</button>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="genProgress"></div></div>
+    <div class="status-line" id="genStatus">Waiting for script and loaded model.</div>
+    <div class="error" id="errorBox" hidden></div>
+  </div>
+
+  <div class="card" id="resultsCard" hidden>
+    <h2>Output</h2>
+    <div class="parts" id="parts"></div>
+  </div>
+</div>
+
+<script type="module">
+  const VOICES = [
+    { id: "af_heart", label: "Heart — US Female (recommended, warm/natural)" },
+    { id: "af_bella", label: "Bella — US Female" },
+    { id: "af_nicole", label: "Nicole — US Female" },
+    { id: "af_sarah", label: "Sarah — US Female" },
+    { id: "af_aoede", label: "Aoede — US Female" },
+    { id: "af_kore", label: "Kore — US Female" },
+    { id: "bf_emma", label: "Emma — UK Female" },
+    { id: "bf_isabella", label: "Isabella — UK Female" },
+    { id: "am_michael", label: "Michael — US Male" },
+    { id: "am_adam", label: "Adam — US Male" },
+    { id: "am_fenrir", label: "Fenrir — US Male" },
+    { id: "bm_george", label: "George — UK Male" },
+  ];
+  const MODEL_ID = "onnx-community/Kokoro-82M-v1.0-ONNX";
+  const WORDS_PER_MIN = 150;
+
+  const $ = (id) => document.getElementById(id);
+  const scriptEl = $("script"), wordCountEl = $("wordCount"), estDurationEl = $("estDuration");
+  const voiceEl = $("voice"), speedEl = $("speed"), speedValEl = $("speedVal");
+  const dtypeEl = $("dtype"), deviceEl = $("device"), partMinutesEl = $("partMinutes");
+  const loadBtn = $("loadBtn"), loadProgress = $("loadProgress"), loadStatus = $("loadStatus");
+  const generateBtn = $("generateBtn"), stopBtn = $("stopBtn");
+  const genProgress = $("genProgress"), genStatus = $("genStatus"), errorBox = $("errorBox");
+  const resultsCard = $("resultsCard"), partsEl = $("parts");
+
+  for (const v of VOICES) {
+    const opt = document.createElement("option");
+    opt.value = v.id; opt.textContent = v.label;
+    voiceEl.appendChild(opt);
+  }
+
+  let tts = null;
+  let cancelled = false;
+  let running = false;
+
+  function updateEstimate() {
+    const words = (scriptEl.value.trim().match(/\S+/g) || []).length;
+    wordCountEl.textContent = `${words} words`;
+    const speed = parseFloat(speedEl.value) || 1;
+    const minutes = words / (WORDS_PER_MIN * speed);
+    estDurationEl.textContent = `~${minutes.toFixed(1)} min at current speed`;
+  }
+  scriptEl.addEventListener("input", updateEstimate);
+  speedEl.addEventListener("input", () => {
+    speedValEl.textContent = `${parseFloat(speedEl.value).toFixed(2)}x`;
+    updateEstimate();
+  });
+  updateEstimate();
+
+  function showError(err) {
+    errorBox.hidden = false;
+    errorBox.textContent = (err && err.message) ? err.message : String(err);
+  }
+  function clearError() { errorBox.hidden = true; errorBox.textContent = ""; }
+
+  loadBtn.addEventListener("click", async () => {
+    clearError();
+    loadBtn.disabled = true;
+    loadStatus.textContent = "Loading kokoro-js...";
+    try {
+      const { KokoroTTS } = await import("https://cdn.jsdelivr.net/npm/kokoro-js/+esm");
+      const device = deviceEl.value === "auto"
+        ? (navigator.gpu ? "webgpu" : "wasm")
+        : deviceEl.value;
+      loadStatus.textContent = `Downloading/loading model (device: ${device})...`;
+      tts = await KokoroTTS.from_pretrained(MODEL_ID, {
+        dtype: dtypeEl.value,
+        device,
+        progress_callback: (p) => {
+          if (p.status === "progress" && p.total) {
+            const pct = Math.round((p.loaded / p.total) * 100);
+            loadProgress.style.width = pct + "%";
+            loadStatus.textContent = `Downloading ${p.file || "model"}: ${pct}%`;
+          } else if (p.status === "done") {
+            loadStatus.textContent = `Loaded ${p.file || "component"}`;
+          }
+        },
+      });
+      loadProgress.style.width = "100%";
+      loadStatus.textContent = "Model loaded. Ready to generate.";
+      generateBtn.disabled = false;
+    } catch (err) {
+      showError(err);
+      loadStatus.textContent = "Failed to load model.";
+      loadBtn.disabled = false;
+    }
+  });
+
+  function chunkScript(text, maxChars = 400) {
+    const paragraphs = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+    const chunks = [];
+    for (const para of paragraphs) {
+      const sentences = para.match(/[^.!?]+[.!?]*\s*/g) || [para];
+      let current = "";
+      for (const s of sentences) {
+        if ((current + s).length > maxChars && current) {
+          chunks.push({ text: current.trim(), paragraphEnd: false });
+          current = s;
+        } else {
+          current += s;
+        }
+      }
+      if (current.trim()) chunks.push({ text: current.trim(), paragraphEnd: false });
+      if (chunks.length) chunks[chunks.length - 1].paragraphEnd = true;
+    }
+    return chunks;
+  }
+
+  function encodeWAV(samples, sampleRate) {
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+    const writeStr = (offset, str) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
+    writeStr(0, "RIFF"); view.setUint32(4, 36 + samples.length * 2, true);
+    writeStr(8, "WAVE"); writeStr(12, "fmt ");
+    view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true); view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true); writeStr(36, "data");
+    view.setUint32(40, samples.length * 2, true);
+    let offset = 44;
+    for (let i = 0; i < samples.length; i++, offset += 2) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    }
+    return new Blob([buffer], { type: "audio/wav" });
+  }
+
+  function concatFloat32(arrays, totalLen) {
+    const out = new Float32Array(totalLen);
+    let offset = 0;
+    for (const a of arrays) { out.set(a, offset); offset += a.length; }
+    return out;
+  }
+
+  function addPartCard(index, blob, seconds) {
+    resultsCard.hidden = false;
+    const div = document.createElement("div");
+    div.className = "part";
+    const url = URL.createObjectURL(blob);
+    div.innerHTML = `
+      <div class="part-head">
+        <span>Part ${index} — ${(seconds / 60).toFixed(1)} min — ${(blob.size / 1024 / 1024).toFixed(1)} MB</span>
+        <a href="${url}" download="voice_note_part${index}.wav"><button>Download</button></a>
+      </div>
+      <audio controls src="${url}"></audio>
+    `;
+    partsEl.appendChild(div);
+  }
+
+  generateBtn.addEventListener("click", async () => {
+    if (!tts || running) return;
+    clearError();
+    const text = scriptEl.value.trim();
+    if (!text) { showError("Paste a script first."); return; }
+
+    running = true; cancelled = false;
+    generateBtn.disabled = true; stopBtn.disabled = false;
+    partsEl.innerHTML = ""; resultsCard.hidden = true;
+    genProgress.style.width = "0%";
+
+    const chunks = chunkScript(text);
+    const voice = voiceEl.value;
+    const speed = parseFloat(speedEl.value);
+    const partMinutes = Math.max(1, parseFloat(partMinutesEl.value) || 15);
+    const sampleRate = 24000;
+    const targetPartSamples = partMinutes * 60 * sampleRate;
+
+    let partBuffers = [], partLen = 0, partIndex = 1, totalSeconds = 0;
+    const startTime = Date.now();
+
+    for (let i = 0; i < chunks.length; i++) {
+      if (cancelled) { genStatus.textContent = "Stopped by user."; break; }
+      genStatus.textContent = `Generating chunk ${i + 1}/${chunks.length} (part ${partIndex})...`;
+      genProgress.style.width = `${Math.round(((i + 1) / chunks.length) * 100)}%`;
+
+      let result;
+      try {
+        result = await tts.generate(chunks[i].text, { voice, speed });
+      } catch (err) {
+        try { result = await tts.generate(chunks[i].text, { voice }); }
+        catch (err2) { showError(err2); running = false; generateBtn.disabled = false; stopBtn.disabled = true; return; }
+      }
+
+      const audio = result.audio || result;
+      partBuffers.push(audio); partLen += audio.length;
+      const gapSec = chunks[i].paragraphEnd ? 0.5 : 0.15;
+      const gap = new Float32Array(Math.round(gapSec * sampleRate));
+      partBuffers.push(gap); partLen += gap.length;
+
+      const isLast = i === chunks.length - 1;
+      if (partLen >= targetPartSamples || isLast) {
+        const samples = concatFloat32(partBuffers, partLen);
+        const blob = encodeWAV(samples, sampleRate);
+        const seconds = partLen / sampleRate;
+        totalSeconds += seconds;
+        addPartCard(partIndex, blob, seconds);
+        partIndex++; partBuffers = []; partLen = 0;
+      }
+    }
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
+    genStatus.textContent = cancelled
+      ? `Stopped after ${elapsed}s.`
+      : `Done in ${elapsed}s — generated ~${(totalSeconds / 60).toFixed(1)} min of audio across ${partIndex - 1} file(s).`;
+
+    running = false; generateBtn.disabled = false; stopBtn.disabled = true;
+  });
+
+  stopBtn.addEventListener("click", () => { cancelled = true; });
+</script>
+</body>
+</html>
