@@ -3,6 +3,7 @@ import path from "node:path";
 import type { PipelineConfig } from "../lib/config.js";
 import { generateNarrationSections } from "../lib/anthropic-client.js";
 import { estimateSpeechSeconds } from "../lib/tts-timing.js";
+import { splitIntoParagraphs } from "../lib/text-utils.js";
 
 export interface ScriptSegment {
   type: "narration" | "pause";
@@ -35,31 +36,19 @@ function distributePauses(
   return raw.map((d) => Math.min(maxPause, Math.max(minPause, Math.round(d * 10) / 10)));
 }
 
-export async function generateScriptForVideo({
-  theme,
-  targetDurationSeconds,
-  config,
-  avoidRepeatingFrom,
-}: GenerateScriptForVideoOptions): Promise<ScriptSegment[]> {
-  const { wordsPerMinute, minPauseSeconds, maxPauseSeconds, wordsPerNarrationSection } =
-    config.script;
-
-  const narrationBudget =
-    targetDurationSeconds - config.script.introSilenceSeconds - config.script.outroSilenceSeconds;
-  const approxSectionSeconds = (wordsPerNarrationSection / wordsPerMinute) * 60;
-  const avgPause = (minPauseSeconds + maxPauseSeconds) / 2;
-  const sectionCount = Math.max(
-    3,
-    Math.round(narrationBudget / (approxSectionSeconds + avgPause))
-  );
-
-  const sections = await generateNarrationSections({
-    theme,
-    sectionCount,
-    wordsPerSection: wordsPerNarrationSection,
-    config,
-    avoidRepeatingFrom,
-  });
+/**
+ * Interleaves narration sections with naturally-varied silent pauses,
+ * stretching/shrinking the pause budget to hit the target total duration.
+ * Shared by both the Claude-generated path and the manually-pasted-script
+ * path below — the only difference between them is where `sections` (the
+ * narration text) comes from.
+ */
+function buildSegmentsFromSections(
+  sections: string[],
+  targetDurationSeconds: number,
+  config: PipelineConfig
+): ScriptSegment[] {
+  const { wordsPerMinute, minPauseSeconds, maxPauseSeconds } = config.script;
 
   const narrationDurations = sections.map((text) => estimateSpeechSeconds(text, wordsPerMinute));
   const totalNarration = narrationDurations.reduce((a, b) => a + b, 0);
@@ -84,6 +73,51 @@ export async function generateScriptForVideo({
   });
 
   return segments;
+}
+
+export async function generateScriptForVideo({
+  theme,
+  targetDurationSeconds,
+  config,
+  avoidRepeatingFrom,
+}: GenerateScriptForVideoOptions): Promise<ScriptSegment[]> {
+  const { wordsPerMinute, wordsPerNarrationSection } = config.script;
+
+  const narrationBudget =
+    targetDurationSeconds - config.script.introSilenceSeconds - config.script.outroSilenceSeconds;
+  const approxSectionSeconds = (wordsPerNarrationSection / wordsPerMinute) * 60;
+  const avgPause = (config.script.minPauseSeconds + config.script.maxPauseSeconds) / 2;
+  const sectionCount = Math.max(
+    3,
+    Math.round(narrationBudget / (approxSectionSeconds + avgPause))
+  );
+
+  const sections = await generateNarrationSections({
+    theme,
+    sectionCount,
+    wordsPerSection: wordsPerNarrationSection,
+    config,
+    avoidRepeatingFrom,
+  });
+
+  return buildSegmentsFromSections(sections, targetDurationSeconds, config);
+}
+
+/**
+ * Builds a script's segments from a manually-written/pasted script instead
+ * of generating one via Claude — paragraphs (blank-line separated) become
+ * narration sections, with the same pause-interleaving as the AI path.
+ */
+export function buildScriptFromText(
+  rawText: string,
+  targetDurationSeconds: number,
+  config: PipelineConfig
+): ScriptSegment[] {
+  const sections = splitIntoParagraphs(rawText);
+  if (sections.length === 0) {
+    throw new Error("Script file is empty — nothing to narrate.");
+  }
+  return buildSegmentsFromSections(sections, targetDurationSeconds, config);
 }
 
 export function writeScriptFile(scriptPath: string, segments: ScriptSegment[]): void {

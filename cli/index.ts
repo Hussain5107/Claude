@@ -6,7 +6,12 @@ import { Command } from "commander";
 import { loadVideoConfig } from "./lib/config.js";
 import { ASSETS_DIR } from "./lib/paths.js";
 import { scaffoldVideo } from "./commands/create.js";
-import { generateScriptForVideo, totalScriptDuration, writeScriptFile } from "./commands/script.js";
+import {
+  buildScriptFromText,
+  generateScriptForVideo,
+  totalScriptDuration,
+  writeScriptFile,
+} from "./commands/script.js";
 import { renderVoiceover } from "./commands/voiceover.js";
 import { buildVisualManifest } from "./commands/visuals.js";
 import { mixMusicUnderNarration } from "./commands/music.js";
@@ -34,6 +39,15 @@ program
     "both"
   )
   .option("--music <path>", "Path to a specific music track to use")
+  .option(
+    "--script-file <path>",
+    "Use a manually-written script instead of generating one via Claude " +
+      "(plain text, paragraphs separated by a blank line = narration sections)"
+  )
+  .option(
+    "--skip-inspection",
+    "Skip the automatic compliance check on --script-file (not recommended)"
+  )
   .action(async (theme: string, opts) => {
     const targetDurationSeconds = parseInt(opts.duration, 10);
     const formats: Array<"horizontal" | "vertical"> =
@@ -45,8 +59,26 @@ program
 
     const config = loadVideoConfig(paths.config);
 
-    console.log(`[2/8] Generating original narration script (~${targetDurationSeconds}s)...`);
-    const segments = await generateScriptForVideo({ theme, targetDurationSeconds, config });
+    let segments;
+    if (opts.scriptFile) {
+      console.log(`[2/8] Using manually-provided script: ${opts.scriptFile}`);
+      const scriptText = fs.readFileSync(path.resolve(opts.scriptFile), "utf-8");
+      if (!opts.skipInspection) {
+        const report = inspectScript({ text: scriptText, targetDurationSeconds, excludeSlug: slug });
+        printComplianceReport(report);
+        if (report.verdict === "fail") {
+          console.error(
+            "\nCompliance check failed — fix the issues above before generating, or re-run with --skip-inspection."
+          );
+          process.exitCode = 1;
+          return;
+        }
+      }
+      segments = buildScriptFromText(scriptText, targetDurationSeconds, config);
+    } else {
+      console.log(`[2/8] Generating original narration script (~${targetDurationSeconds}s)...`);
+      segments = await generateScriptForVideo({ theme, targetDurationSeconds, config });
+    }
     writeScriptFile(paths.script, segments);
     const actualScriptDuration = totalScriptDuration(segments);
     console.log(`      -> ${segments.length} segments, ~${actualScriptDuration}s planned`);
