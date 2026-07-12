@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { VIDEOS_DIR } from "../lib/paths.js";
 import { wordCount } from "../lib/tts-timing.js";
+import type { PipelineConfig } from "../lib/config.js";
 import {
   jaccardSimilarity,
   normalizeForCompare,
@@ -9,6 +10,7 @@ import {
   splitIntoSentences,
 } from "../lib/text-utils.js";
 import { GENERIC_OPENER_PATTERNS, POLICY_KEYWORD_CATEGORIES } from "../lib/compliance-rules.js";
+import { buildScriptFromText, totalScriptDuration } from "./script.js";
 
 export interface ComplianceFinding {
   severity: "fail" | "warn" | "info";
@@ -20,6 +22,8 @@ export interface ComplianceReport {
   verdict: "pass" | "needs_review" | "fail";
   wordCount: number;
   estimatedDurationSeconds: number;
+  /** Full projected video length (narration + distributed pauses), only computed when `config` is provided. */
+  projectedTotalSeconds?: number;
   findings: ComplianceFinding[];
 }
 
@@ -59,6 +63,8 @@ export interface InspectScriptOptions {
   wordsPerMinute?: number;
   /** Slug to exclude from the corpus (when re-inspecting a script already saved to videos/<slug>). */
   excludeSlug?: string;
+  /** When provided along with targetDurationSeconds, the duration check simulates the real pause-fill math (buildScriptFromText) instead of comparing narration-only time against the target. */
+  config?: PipelineConfig;
 }
 
 /**
@@ -72,21 +78,46 @@ export function inspectScript({
   targetDurationSeconds,
   wordsPerMinute = 130,
   excludeSlug,
+  config,
 }: InspectScriptOptions): ComplianceReport {
   const findings: ComplianceFinding[] = [];
   const words = wordCount(text);
   const estimatedDurationSeconds = Math.round((words / wordsPerMinute) * 60);
+  let projectedTotalSeconds: number | undefined;
 
   if (targetDurationSeconds) {
-    const diffPct = Math.abs(estimatedDurationSeconds - targetDurationSeconds) / targetDurationSeconds;
-    if (diffPct > 0.15) {
-      findings.push({
-        severity: "warn",
-        category: "duration",
-        message: `Estimated narration length (~${estimatedDurationSeconds}s at ${wordsPerMinute}wpm) is ${Math.round(
-          diffPct * 100
-        )}% off the target ${targetDurationSeconds}s (pauses are separate — this is narration only). Adjust script length if that gap is too wide.`,
-      });
+    if (config) {
+      // Simulate the actual pipeline: narration + distributed pauses (each
+      // clamped to [minPauseSeconds, maxPauseSeconds]) — this is what the
+      // finished video's real length will be, not narration time alone.
+      const segments = buildScriptFromText(text, targetDurationSeconds, config);
+      projectedTotalSeconds = totalScriptDuration(segments);
+      const diffPct = Math.abs(projectedTotalSeconds - targetDurationSeconds) / targetDurationSeconds;
+      if (diffPct > 0.15) {
+        const tooShort = projectedTotalSeconds < targetDurationSeconds;
+        findings.push({
+          severity: "warn",
+          category: "duration",
+          message: `Projected total video length (~${projectedTotalSeconds}s, narration + pauses) is ${Math.round(
+            diffPct * 100
+          )}% ${tooShort ? "short of" : "over"} the target ${targetDurationSeconds}s — pauses are capped at ${
+            config.script.maxPauseSeconds
+          }s each, so they can't fully make up a large gap on their own. ${
+            tooShort ? "Write more narration sections." : "Trim narration or lower --duration."
+          }`,
+        });
+      }
+    } else {
+      const diffPct = Math.abs(estimatedDurationSeconds - targetDurationSeconds) / targetDurationSeconds;
+      if (diffPct > 0.15) {
+        findings.push({
+          severity: "warn",
+          category: "duration",
+          message: `Estimated narration length (~${estimatedDurationSeconds}s at ${wordsPerMinute}wpm) is ${Math.round(
+            diffPct * 100
+          )}% off the target ${targetDurationSeconds}s (pauses are separate — this is narration only). Adjust script length if that gap is too wide.`,
+        });
+      }
     }
   }
 
@@ -172,11 +203,14 @@ export function inspectScript({
     ? "needs_review"
     : "pass";
 
-  return { verdict, wordCount: words, estimatedDurationSeconds, findings };
+  return { verdict, wordCount: words, estimatedDurationSeconds, projectedTotalSeconds, findings };
 }
 
 export function printComplianceReport(report: ComplianceReport): void {
-  console.log(`\nWord count: ${report.wordCount} (~${report.estimatedDurationSeconds}s at default pacing)`);
+  console.log(`\nWord count: ${report.wordCount} (~${report.estimatedDurationSeconds}s of narration at default pacing)`);
+  if (report.projectedTotalSeconds !== undefined) {
+    console.log(`Projected total video length (narration + pauses): ~${report.projectedTotalSeconds}s`);
+  }
   console.log(`Verdict: ${report.verdict.toUpperCase()}\n`);
   if (report.findings.length === 0) {
     console.log("No issues found.");

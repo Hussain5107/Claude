@@ -3,7 +3,7 @@ import "dotenv/config";
 import fs from "node:fs";
 import path from "node:path";
 import { Command } from "commander";
-import { loadVideoConfig } from "./lib/config.js";
+import { loadDefaultConfig, loadVideoConfig } from "./lib/config.js";
 import { ASSETS_DIR } from "./lib/paths.js";
 import { scaffoldVideo } from "./commands/create.js";
 import {
@@ -70,7 +70,7 @@ program
       console.log(`[2/8] Using manually-provided script: ${opts.scriptFile}`);
       const scriptText = fs.readFileSync(path.resolve(opts.scriptFile), "utf-8");
       if (!opts.skipInspection) {
-        const report = inspectScript({ text: scriptText, targetDurationSeconds, excludeSlug: slug });
+        const report = inspectScript({ text: scriptText, targetDurationSeconds, excludeSlug: slug, config });
         printComplianceReport(report);
         if (report.verdict === "fail") {
           console.error(
@@ -171,9 +171,11 @@ program
   .option("-d, --duration <seconds>", "Target duration in seconds, to sanity-check narration pacing")
   .action((file: string, opts) => {
     const text = fs.readFileSync(path.resolve(file), "utf-8");
+    const targetDurationSeconds = opts.duration ? parseInt(opts.duration, 10) : undefined;
     const report = inspectScript({
       text,
-      targetDurationSeconds: opts.duration ? parseInt(opts.duration, 10) : undefined,
+      targetDurationSeconds,
+      config: targetDurationSeconds ? loadDefaultConfig() : undefined,
     });
     printComplianceReport(report);
     if (report.verdict === "fail") process.exitCode = 1;
