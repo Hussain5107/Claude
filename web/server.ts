@@ -7,7 +7,12 @@ import express, { type Request, type Response } from "express";
 import { VIDEOS_DIR } from "../cli/lib/paths.js";
 import { loadDefaultConfig } from "../cli/lib/config.js";
 import { inspectScript } from "../cli/commands/inspect.js";
-import { InspectionFailedError, runPipeline, type PipelineEvent } from "../cli/commands/pipeline.js";
+import {
+  InspectionFailedError,
+  resumeRenderAndMetadata,
+  runPipeline,
+  type PipelineEvent,
+} from "../cli/commands/pipeline.js";
 
 const PUBLIC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "public");
 
@@ -26,6 +31,34 @@ function broadcast(job: Job, event: PipelineEvent | { type: "job-error"; message
   for (const client of job.clients) {
     client.write(payload);
   }
+}
+
+/** Starts a pipeline run as a tracked, SSE-streamable background job. Shared by /api/generate and /api/resume. */
+function startJob(run: (onEvent: (event: PipelineEvent) => void) => Promise<unknown>): string {
+  const jobId = crypto.randomUUID();
+  const job: Job = { id: jobId, status: "running", events: [], clients: [] };
+  jobs.set(jobId, job);
+
+  const onEvent = (event: PipelineEvent) => {
+    job.events.push(event);
+    broadcast(job, event);
+  };
+
+  run(onEvent)
+    .then(() => {
+      job.status = "done";
+    })
+    .catch((err) => {
+      job.status = "error";
+      job.error = err instanceof InspectionFailedError ? "Compliance check failed." : String(err?.message ?? err);
+      broadcast(job, { type: "job-error", message: job.error });
+    })
+    .finally(() => {
+      for (const client of job.clients) client.end();
+      job.clients = [];
+    });
+
+  return jobId;
 }
 
 function safeSlugPath(slug: string): string {
@@ -80,39 +113,36 @@ export async function startWebServer(port: number): Promise<void> {
     const formats: Array<"horizontal" | "vertical"> =
       format === "16x9" ? ["horizontal"] : format === "9x16" ? ["vertical"] : ["horizontal", "vertical"];
 
-    const jobId = crypto.randomUUID();
-    const job: Job = { id: jobId, status: "running", events: [], clients: [] };
-    jobs.set(jobId, job);
+    const jobId = startJob((onEvent) =>
+      runPipeline(
+        {
+          theme,
+          targetDurationSeconds: duration,
+          formats,
+          musicPath: musicPath || undefined,
+          scriptText: scriptText || undefined,
+          skipInspection: Boolean(skipInspection),
+          manualMetadata: manualMetadata || undefined,
+        },
+        onEvent
+      )
+    );
 
-    const onEvent = (event: PipelineEvent) => {
-      job.events.push(event);
-      broadcast(job, event);
-    };
+    res.json({ jobId });
+  });
 
-    runPipeline(
-      {
-        theme,
-        targetDurationSeconds: duration,
-        formats,
-        musicPath: musicPath || undefined,
-        scriptText: scriptText || undefined,
-        skipInspection: Boolean(skipInspection),
-        manualMetadata: manualMetadata || undefined,
-      },
-      onEvent
-    )
-      .then(() => {
-        job.status = "done";
-      })
-      .catch((err) => {
-        job.status = "error";
-        job.error = err instanceof InspectionFailedError ? "Compliance check failed." : String(err?.message ?? err);
-        broadcast(job, { type: "job-error", message: job.error });
-      })
-      .finally(() => {
-        for (const client of job.clients) client.end();
-        job.clients = [];
-      });
+  app.post("/api/resume", (req: Request, res: Response) => {
+    const { slug, format, manualMetadata } = req.body ?? {};
+    if (typeof slug !== "string" || !slug.trim()) {
+      res.status(400).json({ error: "slug is required" });
+      return;
+    }
+    const formats: Array<"horizontal" | "vertical"> =
+      format === "16x9" ? ["horizontal"] : format === "9x16" ? ["vertical"] : ["horizontal", "vertical"];
+
+    const jobId = startJob((onEvent) =>
+      resumeRenderAndMetadata({ slug, formats, manualMetadata: manualMetadata || undefined }, onEvent)
+    );
 
     res.json({ jobId });
   });

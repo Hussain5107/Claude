@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { loadVideoConfig } from "../lib/config.js";
-import { ASSETS_DIR } from "../lib/paths.js";
+import { ASSETS_DIR, videoPaths } from "../lib/paths.js";
 import type { GeneratedMetadata } from "../lib/anthropic-client.js";
 import { scaffoldVideo } from "./create.js";
 import {
@@ -125,6 +125,83 @@ export async function runPipeline(
   onEvent({ type: "step", step: 6, total: TOTAL_STEPS, label: "Generating subtitles" });
   const captions = buildCaptions(segments);
   writeSubtitleFiles(paths.subtitles.srt, paths.subtitles.json, captions);
+
+  onEvent({ type: "step", step: 7, total: TOTAL_STEPS, label: "Rendering final video(s) with Remotion" });
+  const filenameStem = `${themeSlugOnly(theme)}_${targetDurationSeconds}s_${todayISODate()}`;
+  const outputs = await renderVideo({
+    slug,
+    remotionDir: paths.remotion.dir,
+    outDir: paths.out,
+    audioDir: paths.audio.dir,
+    visualsDir: paths.visuals.dir,
+    filenameStem,
+    formats,
+    onRenderProgress: (format, framesDone, framesTotal) =>
+      onEvent({ type: "render-progress", format, framesDone, framesTotal }),
+  });
+  outputs.forEach((p) => onEvent({ type: "output", path: p }));
+
+  onEvent({
+    type: "step",
+    step: 8,
+    total: TOTAL_STEPS,
+    label: manualMetadata ? "Using manually-provided metadata" : "Generating YouTube metadata",
+  });
+  const metadataPath = path.join(paths.out, `${filenameStem}_metadata.txt`);
+  await buildAndWriteMetadata({
+    theme,
+    segments,
+    durationSeconds: totalNarrationDuration,
+    config,
+    outPath: metadataPath,
+    manualMetadata,
+  });
+
+  onEvent({ type: "done", slug, outputs, metadataPath });
+  return { slug, outputs, metadataPath };
+}
+
+export interface ResumeRenderOptions {
+  /** The videos/<slug> folder name of an existing, partially-completed run. */
+  slug: string;
+  formats: Array<"horizontal" | "vertical">;
+  manualMetadata?: GeneratedMetadata;
+}
+
+/**
+ * Re-runs only the render + metadata steps for a video whose script,
+ * voiceover, visuals, music, and subtitles were already generated —
+ * for recovering from a failure after the slow voiceover step without
+ * re-synthesizing it. Reads theme/duration back from the video's own
+ * video.config.json, so no need to re-supply them.
+ */
+export async function resumeRenderAndMetadata(
+  options: ResumeRenderOptions,
+  onEvent: (event: PipelineEvent) => void
+): Promise<{ slug: string; outputs: string[]; metadataPath: string }> {
+  const { slug, formats, manualMetadata } = options;
+  const paths = videoPaths(slug);
+
+  if (!fs.existsSync(paths.script)) {
+    throw new Error(`No script.json found for "${slug}" — nothing to resume from.`);
+  }
+  if (!fs.existsSync(paths.audio.mixed)) {
+    throw new Error(
+      `No mixed audio found for "${slug}" (audio/mixed.wav) — voiceover/music steps didn't finish. Run "create" again instead of "resume".`
+    );
+  }
+  if (!fs.existsSync(paths.visuals.manifest)) {
+    throw new Error(
+      `No visuals manifest found for "${slug}" — the visuals step didn't finish. Run "create" again instead of "resume".`
+    );
+  }
+
+  const videoConfigRaw = JSON.parse(fs.readFileSync(paths.config, "utf-8"));
+  const theme: string = videoConfigRaw.theme;
+  const targetDurationSeconds: number = videoConfigRaw.targetDurationSeconds;
+  const config = loadVideoConfig(paths.config);
+  const segments: ScriptSegment[] = JSON.parse(fs.readFileSync(paths.script, "utf-8"));
+  const totalNarrationDuration = totalScriptDuration(segments);
 
   onEvent({ type: "step", step: 7, total: TOTAL_STEPS, label: "Rendering final video(s) with Remotion" });
   const filenameStem = `${themeSlugOnly(theme)}_${targetDurationSeconds}s_${todayISODate()}`;

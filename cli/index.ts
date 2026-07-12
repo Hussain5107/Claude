@@ -6,7 +6,40 @@ import { Command } from "commander";
 import { loadDefaultConfig } from "./lib/config.js";
 import type { GeneratedMetadata } from "./lib/anthropic-client.js";
 import { inspectScript, printComplianceReport } from "./commands/inspect.js";
-import { InspectionFailedError, runPipeline, type PipelineEvent } from "./commands/pipeline.js";
+import {
+  InspectionFailedError,
+  resumeRenderAndMetadata,
+  runPipeline,
+  type PipelineEvent,
+} from "./commands/pipeline.js";
+
+function consoleOnEvent(event: PipelineEvent): void {
+  switch (event.type) {
+    case "step":
+      console.log(`\n[${event.step}/${event.total}] ${event.label}...`);
+      break;
+    case "inspection":
+      printComplianceReport(event.report);
+      break;
+    case "inspection-failed":
+      console.error(
+        "\nCompliance check failed — fix the issues above before generating, or re-run with --skip-inspection."
+      );
+      break;
+    case "voiceover-progress":
+      process.stdout.write(`      -> segment ${event.done}/${event.total} done\r`);
+      break;
+    case "render-progress":
+      process.stdout.write(`      -> [${event.format}] frame ${event.framesDone}/${event.framesTotal}\r`);
+      break;
+    case "output":
+      console.log(`      -> ${event.path}`);
+      break;
+    case "done":
+      console.log(`\nDone. Video ready in videos/${event.slug}/out/\n`);
+      break;
+  }
+}
 
 const program = new Command();
 
@@ -52,34 +85,6 @@ program
       ? JSON.parse(fs.readFileSync(path.resolve(opts.metadataFile), "utf-8"))
       : undefined;
 
-    const onEvent = (event: PipelineEvent) => {
-      switch (event.type) {
-        case "step":
-          console.log(`\n[${event.step}/${event.total}] ${event.label}...`);
-          break;
-        case "inspection":
-          printComplianceReport(event.report);
-          break;
-        case "inspection-failed":
-          console.error(
-            "\nCompliance check failed — fix the issues above before generating, or re-run with --skip-inspection."
-          );
-          break;
-        case "voiceover-progress":
-          process.stdout.write(`      -> segment ${event.done}/${event.total} done\r`);
-          break;
-        case "render-progress":
-          process.stdout.write(`      -> [${event.format}] frame ${event.framesDone}/${event.framesTotal}\r`);
-          break;
-        case "output":
-          console.log(`      -> ${event.path}`);
-          break;
-        case "done":
-          console.log(`\nDone. Video ready in videos/${event.slug}/out/\n`);
-          break;
-      }
-    };
-
     try {
       await runPipeline(
         {
@@ -91,7 +96,7 @@ program
           skipInspection: opts.skipInspection,
           manualMetadata,
         },
-        onEvent
+        consoleOnEvent
       );
     } catch (err) {
       if (err instanceof InspectionFailedError) {
@@ -100,6 +105,33 @@ program
       }
       throw err;
     }
+  });
+
+program
+  .command("resume")
+  .description(
+    "Re-run only the render + metadata steps for a video whose script/voiceover/visuals/music/subtitles " +
+      "already finished — recovers from a render failure without re-synthesizing voiceover"
+  )
+  .argument("<slug>", "The videos/<slug> folder name to resume (e.g. morning-gratitude-meditation-2026-07-12)")
+  .option(
+    "-f, --format <format>",
+    "Output format: both | 16x9 | 9x16",
+    "both"
+  )
+  .option(
+    "--metadata-file <path>",
+    "Use manually-provided metadata instead of generating it via Claude " +
+      '(JSON file: {"title", "description", "tags": [...], "chapterTitles": [...]})'
+  )
+  .action(async (slug: string, opts) => {
+    const formats: Array<"horizontal" | "vertical"> =
+      opts.format === "16x9" ? ["horizontal"] : opts.format === "9x16" ? ["vertical"] : ["horizontal", "vertical"];
+    const manualMetadata: GeneratedMetadata | undefined = opts.metadataFile
+      ? JSON.parse(fs.readFileSync(path.resolve(opts.metadataFile), "utf-8"))
+      : undefined;
+
+    await resumeRenderAndMetadata({ slug, formats, manualMetadata }, consoleOnEvent);
   });
 
 program

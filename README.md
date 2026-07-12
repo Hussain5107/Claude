@@ -133,6 +133,23 @@ npm run meditate -- create "morning gratitude meditation" --duration 900 \
 
 Omit either flag to have that step call Claude as usual.
 
+### Resuming after a failure
+
+Script generation, voiceover, visuals, music, and subtitles (steps 1-6) are
+each saved to disk as they finish. If something fails afterward — most
+often the Remotion render step, which is the most environment-sensitive
+part — you don't need to redo the slow voiceover step:
+
+```sh
+npm run meditate -- resume <slug> --metadata-file path/to/metadata.json
+```
+
+`<slug>` is the `videos/<slug>/` folder name (e.g.
+`morning-gratitude-meditation-2026-07-12`). This re-reads the existing
+`script.json`, `audio/mixed.wav`, and `visuals/manifest.json` already on
+disk and only re-runs rendering + metadata. Theme and duration are read
+back from that video's own `video.config.json` — no need to re-supply them.
+
 ## Web UI
 
 ```sh
