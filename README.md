@@ -78,6 +78,27 @@ This scaffolds `videos/<theme-slug>-<date>/`, then runs the full pipeline in
 order: script → voiceover → visuals → music → subtitles → render → metadata.
 The finished MP4s and `..._metadata.txt` land in that video's `out/` folder.
 
+### Reviewing a manually-written script
+
+If you write your own script (e.g. with a separate Claude Project) instead of
+letting `create` generate one, run it through the compliance inspector first
+— this is pure local text analysis, no API key or network call needed:
+
+```sh
+npm run meditate -- inspect path/to/script.txt --duration 900
+```
+
+It checks: narration pacing vs. your target duration, text overlap against
+every prior script in `videos/` (the same "reused content" risk YouTube's
+manual review flags), verbatim sentence repetition within the script, generic
+stock-meditation opening phrases, and a curated keyword scan for
+advertiser-unfriendly content (unsubstantiated medical claims, self-harm
+language, engagement-manipulation phrasing, etc.). It prints `[FAIL]` /
+`[WARN]` / `[INFO]` findings and exits non-zero if anything hard-fails. This
+is a heuristic keyword/similarity scan, not a legal policy determination —
+treat it as a first pass, not a substitute for reading YouTube's current
+guidelines yourself.
+
 To add your own footage to a specific video before rendering, drop clips or
 photos into `videos/<theme-slug>-<date>/visuals/custom/` before running (or
 between steps, if you're driving the pipeline manually) — custom footage is

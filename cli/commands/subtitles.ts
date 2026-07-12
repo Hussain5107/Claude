@@ -2,16 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import type { ScriptSegment } from "./script.js";
 import { wordCount } from "../lib/tts-timing.js";
+import { splitIntoSentences } from "../lib/text-utils.js";
 
 export interface Caption {
   text: string;
   startSeconds: number;
   endSeconds: number;
-}
-
-function splitIntoSentences(text: string): string[] {
-  const sentences = text.match(/[^.!?]+[.!?]*/g);
-  return (sentences ?? [text]).map((s) => s.trim()).filter(Boolean);
 }
 
 /**

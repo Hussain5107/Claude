@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import "dotenv/config";
+import fs from "node:fs";
 import path from "node:path";
 import { Command } from "commander";
 import { loadVideoConfig } from "./lib/config.js";
@@ -12,6 +13,7 @@ import { mixMusicUnderNarration } from "./commands/music.js";
 import { buildCaptions, writeSubtitleFiles } from "./commands/subtitles.js";
 import { renderVideo } from "./commands/render.js";
 import { buildAndWriteMetadata } from "./commands/metadata.js";
+import { inspectScript, printComplianceReport } from "./commands/inspect.js";
 import { todayISODate, themeSlugOnly } from "./lib/slugify.js";
 
 const program = new Command();
@@ -113,6 +115,23 @@ program
     console.log(`      -> ${metadataPath}`);
 
     console.log(`\nDone. Video ready in videos/${slug}/out/\n`);
+  });
+
+program
+  .command("inspect")
+  .description(
+    "Review a manually-written script for YouTube policy compliance and originality (no API calls)"
+  )
+  .argument("<file>", "Path to a plain-text script file")
+  .option("-d, --duration <seconds>", "Target duration in seconds, to sanity-check narration pacing")
+  .action((file: string, opts) => {
+    const text = fs.readFileSync(path.resolve(file), "utf-8");
+    const report = inspectScript({
+      text,
+      targetDurationSeconds: opts.duration ? parseInt(opts.duration, 10) : undefined,
+    });
+    printComplianceReport(report);
+    if (report.verdict === "fail") process.exitCode = 1;
   });
 
 program.parseAsync(process.argv);
