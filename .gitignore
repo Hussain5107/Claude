@@ -1,0 +1,22 @@
+node_modules/
+dist/
+.env
+*.log
+logs/*.log
+
+# Generated per-video artifacts (large binary/media files, regenerable from script.json + config)
+videos/**/audio/
+videos/**/visuals/downloaded/
+videos/**/out/
+videos/**/.remotion-cache/
+
+# Shared caches
+cache/stock-footage/**
+!cache/stock-footage/.gitkeep
+
+# Remotion asset staging area (render.ts copies each video's finalized audio/
+# visuals in here per slug right before rendering — see cli/commands/render.ts)
+public/
+
+# OS / editor
+.DS_Store

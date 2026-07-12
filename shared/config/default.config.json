@@ -1,0 +1,63 @@
+{
+  "script": {
+    "provider": "anthropic",
+    "model": "claude-opus-4-8",
+    "wordsPerMinute": 130,
+    "minPauseSeconds": 5,
+    "maxPauseSeconds": 60,
+    "pauseDistribution": "natural",
+    "introSilenceSeconds": 8,
+    "outroSilenceSeconds": 10,
+    "wordsPerNarrationSection": 110
+  },
+  "voiceover": {
+    "provider": "elevenlabs",
+    "defaultVoiceId": "21m00Tcm4TlvDq8ikWAM",
+    "modelId": "eleven_multilingual_v2",
+    "stability": 0.55,
+    "similarityBoost": 0.75,
+    "style": 0.15,
+    "useSpeakerBoost": true
+  },
+  "visuals": {
+    "providers": ["pexels", "pixabay"],
+    "clipMinDurationSeconds": 12,
+    "maxRepeatsOfSameClip": 1,
+    "kenBurns": {
+      "zoomRange": [1.0, 1.12],
+      "panRange": 0.06,
+      "minSegmentSeconds": 10,
+      "maxSegmentSeconds": 25
+    }
+  },
+  "music": {
+    "narrationVolumeDb": 0,
+    "musicVolumeDb": -22,
+    "duckingVolumeDb": -30,
+    "duckAttackSeconds": 0.6,
+    "duckReleaseSeconds": 1.2
+  },
+  "subtitles": {
+    "fontFamily": "Poppins",
+    "fontSizePx": 54,
+    "color": "#FFFFFF",
+    "backgroundColor": "rgba(0,0,0,0.35)",
+    "position": "bottom",
+    "fadeInMs": 350,
+    "fadeOutMs": 350,
+    "maxCharsPerLine": 42
+  },
+  "branding": {
+    "channelName": "Your Channel Name",
+    "introDurationSeconds": 4,
+    "introText": "Your Channel Name",
+    "accentColor": "#C9A876"
+  },
+  "render": {
+    "fps": 30,
+    "formats": {
+      "16x9": { "width": 1920, "height": 1080 },
+      "9x16": { "width": 1080, "height": 1920 }
+    }
+  }
+}
