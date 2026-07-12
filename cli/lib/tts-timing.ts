@@ -1,7 +1,7 @@
-// Estimates spoken duration for calm-paced narration. ElevenLabs output is the
-// source of truth once rendered (see voiceover.ts, which corrects segment
-// durations to match actual audio length); this is only used to plan the
-// script's segment structure before any audio exists.
+// Estimates spoken duration for calm-paced narration. Zahra Studio's rendered
+// output is the source of truth once synthesized (see voiceover.ts, which
+// corrects segment durations to match actual audio length); this is only
+// used to plan the script's segment structure before any audio exists.
 export function estimateSpeechSeconds(text: string, wordsPerMinute = 130): number {
   const wordCount = text
     .trim()

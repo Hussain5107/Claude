@@ -15,12 +15,13 @@ export interface PipelineConfig {
   };
   voiceover: {
     provider: string;
-    defaultVoiceId: string;
-    modelId: string;
-    stability: number;
-    similarityBoost: number;
-    style: number;
-    useSpeakerBoost: boolean;
+    baseUrl: string;
+    voiceName: string;
+    language: string;
+    exaggeration: number;
+    cfgWeight: number;
+    pollIntervalMs: number;
+    jobTimeoutMs: number;
   };
   visuals: {
     providers: string[];

@@ -3,10 +3,12 @@
 A local, CLI-driven pipeline for producing original guided meditation videos
 (narration + calming visuals + ambient music + subtitles) built on
 [Remotion](https://www.remotion.dev/). Each run generates a fresh script via
-Claude, synthesizes voiceover via ElevenLabs, sources varied background
-footage via Pexels/Pixabay (or your own clips), mixes in ducked ambient
-music, and renders finished MP4s in both 16:9 (long-form) and 9:16 (Shorts)
-— plus a YouTube metadata file ready to paste in on upload.
+Claude, synthesizes voiceover in your own cloned voice via a locally running
+**Zahra Studio** instance (free, no API key — see
+[Voiceover engine](#voiceover-engine-zahra-studio) below), sources varied
+background footage via Pexels/Pixabay (or your own clips), mixes in ducked
+ambient music, and renders finished MP4s in both 16:9 (long-form) and 9:16
+(Shorts) — plus a YouTube metadata file ready to paste in on upload.
 
 See `PROJECT_STRUCTURE.md`-style notes below for how everything is laid out,
 and the compliance notes at the bottom for why the pipeline is built this way.
@@ -20,17 +22,37 @@ and the compliance notes at the bottom for why the pipeline is built this way.
   brew install ffmpeg              # macOS
   ```
 - API keys:
-  - **Anthropic** (script generation) — https://console.anthropic.com
-  - **ElevenLabs** (voiceover) — https://elevenlabs.io
+  - **Anthropic** (script generation) — https://console.anthropic.com (paid, pay-as-you-go; text-only generation costs cents per video)
   - **Pexels** and/or **Pixabay** (stock footage, free tiers) — at least one required unless you only use your own footage
+- **Zahra Studio** running locally (voiceover — see below) — free, no API key
+
+## Voiceover engine: Zahra Studio
+
+Voiceover uses [Zahra Studio](https://github.com/Hussain5107/Claude/tree/claude/voice-note-script-generation-ome6cm/voice_cloning_studio)
+— a local voice-cloning app (FastAPI + Chatterbox, MIT-licensed, free for
+commercial use) checked into the `claude/voice-note-script-generation-ome6cm`
+branch of this same repo. It runs entirely on your own machine: no API key,
+no per-use cost, and narration comes out in your own cloned voice.
+
+**One-time setup:**
+1. Check out that branch (or copy the `voice_cloning_studio/` folder) alongside this pipeline.
+2. Follow its own README to install dependencies and clone a voice from a short reference clip you have the right to use.
+3. Note the voice name you gave it.
+
+**Every time you generate a video:**
+1. Start the Zahra Studio backend: `uvicorn backend.main:app --port 8000` (or `start_backend.bat`/`.sh`) — leave it running.
+2. Make sure `.env` has `ZAHRA_STUDIO_BASE_URL` (default `http://localhost:8000`) and `ZAHRA_VOICE_NAME` set to your cloned voice's name.
+3. Run `meditate create` as normal — the voiceover module submits each narration segment to Zahra Studio, waits for the background job to finish, and downloads the result.
+
+Generation is CPU-bound and proportional to script length — expect it to take real time on a machine without a GPU.
 
 ## Setup
 
 ```sh
 npm install
 cp .env.example .env
-# then edit .env and fill in ANTHROPIC_API_KEY, ELEVENLABS_API_KEY, and
-# PEXELS_API_KEY and/or PIXABAY_API_KEY
+# then edit .env and fill in ANTHROPIC_API_KEY, ZAHRA_STUDIO_BASE_URL,
+# ZAHRA_VOICE_NAME, and PEXELS_API_KEY and/or PIXABAY_API_KEY
 ```
 
 Add at least one royalty-free ambient music track to `assets/music/` (`.mp3`

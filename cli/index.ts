@@ -49,7 +49,7 @@ program
     const actualScriptDuration = totalScriptDuration(segments);
     console.log(`      -> ${segments.length} segments, ~${actualScriptDuration}s planned`);
 
-    console.log(`[3/8] Synthesizing narration voiceover via ElevenLabs...`);
+    console.log(`[3/8] Synthesizing narration voiceover via Zahra Studio...`);
     await renderVoiceover({
       segments,
       segmentsDir: paths.audio.segments,

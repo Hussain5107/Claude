@@ -37,7 +37,7 @@ export async function generateSilence(
 /**
  * Concatenates narration segments and silence gaps, in order, into a single
  * audio track. Uses the concat *filter* (not the concat demuxer) so mixed
- * input codecs/containers (ElevenLabs mp3 + generated silence wav) are
+ * input codecs/containers (Zahra Studio wav + generated silence wav) are
  * decoded and re-joined safely rather than requiring byte-identical formats.
  */
 export async function concatAudioFiles(

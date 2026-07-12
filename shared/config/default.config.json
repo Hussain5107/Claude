@@ -11,13 +11,14 @@
     "wordsPerNarrationSection": 110
   },
   "voiceover": {
-    "provider": "elevenlabs",
-    "defaultVoiceId": "21m00Tcm4TlvDq8ikWAM",
-    "modelId": "eleven_multilingual_v2",
-    "stability": 0.55,
-    "similarityBoost": 0.75,
-    "style": 0.15,
-    "useSpeakerBoost": true
+    "provider": "zahra-studio",
+    "baseUrl": "http://localhost:8000",
+    "voiceName": "",
+    "language": "en",
+    "exaggeration": 0.4,
+    "cfgWeight": 0.5,
+    "pollIntervalMs": 2000,
+    "jobTimeoutMs": 3600000
   },
   "visuals": {
     "providers": ["pexels", "pixabay"],
