@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { ScriptSegment } from "./script.js";
 import type { PipelineConfig } from "../lib/config.js";
-import { generateMetadata } from "../lib/anthropic-client.js";
+import { generateMetadata, type GeneratedMetadata } from "../lib/anthropic-client.js";
 
 export interface BuildMetadataOptions {
   theme: string;
@@ -10,6 +10,8 @@ export interface BuildMetadataOptions {
   durationSeconds: number;
   config: PipelineConfig;
   outPath: string;
+  /** Pre-written metadata (e.g. pasted from a manual Claude chat) — skips the Anthropic API call entirely when provided. */
+  manualMetadata?: GeneratedMetadata;
 }
 
 function formatChapterTimestamp(seconds: number): string {
@@ -29,15 +31,18 @@ export async function buildAndWriteMetadata({
   durationSeconds,
   config,
   outPath,
+  manualMetadata,
 }: BuildMetadataOptions): Promise<void> {
   const narrationSegments = segments.filter((s) => s.type === "narration");
 
-  const metadata = await generateMetadata({
-    theme,
-    narrationSections: narrationSegments.map((s) => s.text),
-    durationSeconds,
-    config,
-  });
+  const metadata =
+    manualMetadata ??
+    (await generateMetadata({
+      theme,
+      narrationSections: narrationSegments.map((s) => s.text),
+      durationSeconds,
+      config,
+    }));
 
   // Chapters: YouTube requires the first entry at 0:00 and >=3 chapters total.
   let clock = 0;

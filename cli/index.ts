@@ -18,6 +18,7 @@ import { mixMusicUnderNarration } from "./commands/music.js";
 import { buildCaptions, writeSubtitleFiles } from "./commands/subtitles.js";
 import { renderVideo } from "./commands/render.js";
 import { buildAndWriteMetadata } from "./commands/metadata.js";
+import type { GeneratedMetadata } from "./lib/anthropic-client.js";
 import { inspectScript, printComplianceReport } from "./commands/inspect.js";
 import { todayISODate, themeSlugOnly } from "./lib/slugify.js";
 
@@ -47,6 +48,11 @@ program
   .option(
     "--skip-inspection",
     "Skip the automatic compliance check on --script-file (not recommended)"
+  )
+  .option(
+    "--metadata-file <path>",
+    "Use manually-provided metadata instead of generating it via Claude " +
+      '(JSON file: {"title", "description", "tags": [...], "chapterTitles": [...]})'
   )
   .action(async (theme: string, opts) => {
     const targetDurationSeconds = parseInt(opts.duration, 10);
@@ -135,7 +141,13 @@ program
     });
     outputs.forEach((p) => console.log(`      -> ${p}`));
 
-    console.log(`[8/8] Generating YouTube metadata...`);
+    let manualMetadata: GeneratedMetadata | undefined;
+    if (opts.metadataFile) {
+      console.log(`[8/8] Using manually-provided metadata: ${opts.metadataFile}`);
+      manualMetadata = JSON.parse(fs.readFileSync(path.resolve(opts.metadataFile), "utf-8"));
+    } else {
+      console.log(`[8/8] Generating YouTube metadata...`);
+    }
     const metadataPath = path.join(paths.out, `${filenameStem}_metadata.txt`);
     await buildAndWriteMetadata({
       theme,
@@ -143,6 +155,7 @@ program
       durationSeconds: totalNarrationDuration,
       config,
       outPath: metadataPath,
+      manualMetadata,
     });
     console.log(`      -> ${metadataPath}`);
 
