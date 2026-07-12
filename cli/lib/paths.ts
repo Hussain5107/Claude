@@ -29,6 +29,18 @@ export function videoDir(slug: string): string {
   return path.join(VIDEOS_DIR, slug);
 }
 
+/**
+ * Converts an OS-native relative path to forward-slash form. Required
+ * whenever a path is going to be embedded in a URL (e.g. Remotion's
+ * staticFile()) rather than used for local filesystem access — on Windows,
+ * path.relative()/path.join() produce backslash-separated paths, which are
+ * not valid URL path separators and get percent-encoded literally (%5C)
+ * instead of being treated as directory separators, breaking asset loading.
+ */
+export function toUrlPath(relativePath: string): string {
+  return relativePath.split(path.sep).join("/");
+}
+
 export function videoPaths(slug: string) {
   const base = videoDir(slug);
   return {

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { videoPaths } from "../lib/paths.js";
+import { toUrlPath, videoPaths } from "../lib/paths.js";
 import { slugifyTheme, todayISODate } from "../lib/slugify.js";
 
 const TEMPLATE_DIR = path.resolve(
@@ -60,7 +60,7 @@ export function scaffoldVideo({
     createdAt: new Date().toISOString(),
     // Relative to the video's base folder — combined with `slug` and resolved
     // via staticFile() in Root.tsx once render.ts stages assets into public/<slug>/.
-    mixedAudioPath: path.relative(paths.base, paths.audio.mixed),
+    mixedAudioPath: toUrlPath(path.relative(paths.base, paths.audio.mixed)),
     configOverrides,
   };
   fs.writeFileSync(paths.config, JSON.stringify(videoConfig, null, 2));

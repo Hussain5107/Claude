@@ -1,7 +1,29 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import { PUBLIC_DIR } from "../lib/paths.js";
+
+const TEMPLATE_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "templates",
+  "remotion-video"
+);
+
+/**
+ * Each video's remotion/ folder is a one-time copy of cli/templates/remotion-video/
+ * made at scaffold time (see create.ts). A `git pull` that fixes a bug in the
+ * template doesn't touch already-scaffolded videos, so re-copy the template's
+ * non-generated files here before every render — this way template fixes
+ * (like the Windows backslash-path normalization in Root.tsx) apply
+ * retroactively without the user needing to notice or re-scaffold.
+ */
+export function refreshRemotionTemplate(remotionDir: string): void {
+  for (const file of ["Root.tsx", "Composition.tsx", "index.ts", "remotion.config.ts"]) {
+    fs.copyFileSync(path.join(TEMPLATE_DIR, file), path.join(remotionDir, file));
+  }
+}
 
 export interface RenderVideoOptions {
   slug: string;
@@ -100,6 +122,7 @@ export async function renderVideo({
   onRenderProgress,
 }: RenderVideoOptions): Promise<string[]> {
   fs.mkdirSync(outDir, { recursive: true });
+  refreshRemotionTemplate(remotionDir);
   syncAssetsToPublic({ slug, audioDir, visualsDir });
   const outputPaths: string[] = [];
 

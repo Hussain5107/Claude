@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { PipelineConfig } from "../lib/config.js";
+import { toUrlPath } from "../lib/paths.js";
 import {
   downloadClip,
   findFreshClips,
@@ -72,7 +73,9 @@ export async function buildVisualManifest({
   const neededClipCount = Math.max(3, Math.ceil(totalDurationSeconds / avgSegment));
 
   const entries: VisualManifestEntry[] = [];
-  const toRelative = (absPath: string) => path.relative(videoBaseDir, absPath);
+  // Stored as a URL path segment (staticFile() in Root.tsx), so always
+  // forward-slash regardless of the OS's native path separator.
+  const toRelative = (absPath: string) => toUrlPath(path.relative(videoBaseDir, absPath));
 
   // Prefer the user's own footage first — always original, zero API dependency.
   for (const filePath of listCustomAssets(customDir)) {

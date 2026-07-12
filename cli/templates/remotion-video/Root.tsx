@@ -17,9 +17,18 @@ const config = {
 // render.ts stages this video's finalized audio/visuals into
 // public/<slug>/ right before rendering — prefix every path with slug here
 // to match where they land.
+//
+// These paths get embedded in a staticFile() URL, so any backslashes (which
+// can end up on disk from an OS-native path.relative()/path.join() call on
+// Windows) must become forward slashes here — otherwise they get
+// percent-encoded literally (%5C) instead of acting as separators, breaking
+// asset loading. Normalizing at read time also self-heals manifests that
+// were already written to disk with backslashes before this was fixed
+// upstream.
+const toUrlPath = (p: string) => p.split("\\").join("/");
 const slug = (videoConfig as any).slug as string;
 const resolvedClips = (visualManifest as { filePath: string; [k: string]: unknown }[]).map(
-  (clip) => ({ ...clip, filePath: staticFile(`${slug}/${clip.filePath}`) })
+  (clip) => ({ ...clip, filePath: staticFile(`${slug}/${toUrlPath(clip.filePath)}`) })
 );
 
 const fps = config.render.fps;
@@ -33,7 +42,7 @@ const sharedProps = {
   clips: resolvedClips as any,
   captions: captions as any,
   subtitleStyle: config.subtitles,
-  audioSrc: staticFile(`${slug}/${(videoConfig as any).mixedAudioPath}`),
+  audioSrc: staticFile(`${slug}/${toUrlPath((videoConfig as any).mixedAudioPath)}`),
   channelName: config.branding.channelName,
   accentColor: config.branding.accentColor,
   introDurationSeconds: config.branding.introDurationSeconds,
