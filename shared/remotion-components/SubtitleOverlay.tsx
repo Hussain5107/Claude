@@ -32,19 +32,26 @@ export const SubtitleOverlay: React.FC<SubtitleOverlayProps> = ({ captions, styl
   );
   if (!active) return null;
 
-  const fadeInSeconds = style.fadeInMs / 1000;
-  const fadeOutSeconds = style.fadeOutMs / 1000;
-  const opacity = interpolate(
+  // Fade in/out independently (rather than one 4-point interpolate over
+  // [start, start+fadeIn, end-fadeOut, end]) so short caption cues — shorter
+  // than fadeInSeconds + fadeOutSeconds — can't produce a non-monotonic input
+  // range (interpolate() requires strictly increasing values).
+  const duration = active.endSeconds - active.startSeconds;
+  const fadeIn = Math.max(0.001, Math.min(style.fadeInMs / 1000, duration / 2));
+  const fadeOut = Math.max(0.001, Math.min(style.fadeOutMs / 1000, duration / 2));
+  const fadeInOpacity = interpolate(
     timeSeconds,
-    [
-      active.startSeconds,
-      active.startSeconds + fadeInSeconds,
-      active.endSeconds - fadeOutSeconds,
-      active.endSeconds,
-    ],
-    [0, 1, 1, 0],
+    [active.startSeconds, active.startSeconds + fadeIn],
+    [0, 1],
     { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
   );
+  const fadeOutOpacity = interpolate(
+    timeSeconds,
+    [active.endSeconds - fadeOut, active.endSeconds],
+    [1, 0],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+  );
+  const opacity = Math.min(fadeInOpacity, fadeOutOpacity);
 
   const justifyContent =
     style.position === "top" ? "flex-start" : style.position === "center" ? "center" : "flex-end";
