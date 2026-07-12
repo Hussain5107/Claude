@@ -150,6 +150,15 @@ npm run meditate -- resume <slug> --metadata-file path/to/metadata.json
 disk and only re-runs rendering + metadata. Theme and duration are read
 back from that video's own `video.config.json` — no need to re-supply them.
 
+The render step itself is also chunked (60-second segments by default),
+each rendered separately and stitched together with a lossless `ffmpeg`
+concat at the end. Progress is tracked per chunk under each video's
+`out/.render-work/<format>/`, so if the render crashes partway through
+(e.g. frame 515 of 900), running `resume` again only re-renders the chunk
+that was in progress — every chunk already finished is reused as-is. Once
+a format's chunks are all done and successfully concatenated, that
+`.render-work` folder is deleted automatically.
+
 ## Web UI
 
 ```sh

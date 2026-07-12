@@ -128,3 +128,14 @@ export function writeScriptFile(scriptPath: string, segments: ScriptSegment[]): 
 export function totalScriptDuration(segments: ScriptSegment[]): number {
   return Math.round(segments.reduce((sum, s) => sum + s.duration, 0) * 10) / 10;
 }
+
+/**
+ * Mirrors Root.tsx's own durationInFrames calculation exactly (unrounded
+ * total seconds * fps, not totalScriptDuration()'s 0.1s-rounded value) so
+ * chunked rendering plans frame ranges against the same frame count Remotion
+ * itself will use for the composition.
+ */
+export function scriptDurationInFrames(segments: ScriptSegment[], fps: number): number {
+  const totalSeconds = segments.reduce((sum, s) => sum + s.duration, 0);
+  return Math.max(1, Math.round(totalSeconds * fps));
+}

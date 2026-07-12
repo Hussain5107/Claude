@@ -7,6 +7,7 @@ import { scaffoldVideo } from "./create.js";
 import {
   buildScriptFromText,
   generateScriptForVideo,
+  scriptDurationInFrames,
   totalScriptDuration,
   writeScriptFile,
   type ScriptSegment,
@@ -136,6 +137,8 @@ export async function runPipeline(
     visualsDir: paths.visuals.dir,
     filenameStem,
     formats,
+    fps: config.render.fps,
+    durationInFrames: scriptDurationInFrames(segments, config.render.fps),
     onRenderProgress: (format, framesDone, framesTotal) =>
       onEvent({ type: "render-progress", format, framesDone, framesTotal }),
   });
@@ -213,6 +216,8 @@ export async function resumeRenderAndMetadata(
     visualsDir: paths.visuals.dir,
     filenameStem,
     formats,
+    fps: config.render.fps,
+    durationInFrames: scriptDurationInFrames(segments, config.render.fps),
     onRenderProgress: (format, framesDone, framesTotal) =>
       onEvent({ type: "render-progress", format, framesDone, framesTotal }),
   });
