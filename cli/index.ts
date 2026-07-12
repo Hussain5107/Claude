@@ -27,10 +27,16 @@ function consoleOnEvent(event: PipelineEvent): void {
       );
       break;
     case "voiceover-progress":
-      process.stdout.write(`      -> segment ${event.done}/${event.total} done\r`);
+      // \x1b[K clears any leftover characters from a longer previous line —
+      // without it, a shorter update (e.g. going from double- to
+      // single-digit counts) leaves stale digits behind, making the line
+      // look like garbled/concatenated numbers.
+      process.stdout.write(`\r      -> segment ${event.done}/${event.total} done\x1b[K`);
       break;
     case "render-progress":
-      process.stdout.write(`      -> [${event.format}] frame ${event.framesDone}/${event.framesTotal}\r`);
+      process.stdout.write(
+        `\r      -> [${event.format}] frame ${event.framesDone}/${event.framesTotal}\x1b[K`
+      );
       break;
     case "output":
       console.log(`      -> ${event.path}`);

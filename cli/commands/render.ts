@@ -3,7 +3,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { PUBLIC_DIR } from "../lib/paths.js";
+import { PUBLIC_DIR, ROOT_DIR } from "../lib/paths.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -13,6 +13,17 @@ const TEMPLATE_DIR = path.resolve(
   "templates",
   "remotion-video"
 );
+
+// Invoke Remotion's CLI entry script directly with `node`, rather than going
+// through `npx remotion` (a .cmd shim on Windows). This sidesteps two
+// problems npx caused: it originally needed `shell: true` on Windows to
+// avoid an ENOENT spawning the shim at all, and shell:true combined with an
+// args array only concatenates arguments without escaping them (Node's
+// DEP0190 warning) — fragile if any path ever contains a space or special
+// character, and noisy since each of the many chunk renders spawns its own
+// Node process that re-prints the warning. `node <entry>.js ...args` needs
+// no shell on any platform.
+const REMOTION_CLI_ENTRY = path.join(ROOT_DIR, "node_modules", "@remotion", "cli", "remotion-cli.js");
 
 /**
  * Each video's remotion/ folder is a one-time copy of cli/templates/remotion-video/
@@ -91,13 +102,10 @@ function runRemotionRender(
   onProgress?: (framesDoneInChunk: number, framesTotalInChunk: number) => void
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    const args = ["remotion", "render", "index.ts", format, outPath];
+    const args = [REMOTION_CLI_ENTRY, "render", "index.ts", format, outPath];
     if (frameRange) args.push(`--frames=${frameRange[0]}-${frameRange[1]}`);
 
-    const child = spawn("npx", args, {
-      cwd: remotionDir,
-      shell: process.platform === "win32",
-    });
+    const child = spawn(process.execPath, args, { cwd: remotionDir });
 
     let stderrOutput = "";
     let stdoutBuffer = "";
