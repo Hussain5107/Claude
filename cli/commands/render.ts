@@ -1,10 +1,7 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { spawn } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs";
 import { PUBLIC_DIR } from "../lib/paths.js";
-
-const execFileAsync = promisify(execFile);
 
 export interface RenderVideoOptions {
   slug: string;
@@ -15,6 +12,8 @@ export interface RenderVideoOptions {
   /** Filename stem, e.g. "morning-gratitude_900s_2026-07-12" — format suffix is appended per render. */
   filenameStem: string;
   formats?: Array<"horizontal" | "vertical">;
+  /** Called as Remotion prints frame-render progress for the given format. */
+  onRenderProgress?: (format: string, framesDone: number, framesTotal: number) => void;
 }
 
 const FORMAT_SUFFIX: Record<string, string> = {
@@ -46,6 +45,46 @@ export function syncAssetsToPublic({
   fs.cpSync(visualsDir, path.join(stagingDir, "visuals"), { recursive: true });
 }
 
+const RENDERED_LINE = /Rendered (\d+)\/(\d+)/;
+
+function runRemotionRender(
+  remotionDir: string,
+  format: string,
+  outPath: string,
+  onProgress?: (framesDone: number, framesTotal: number) => void
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("npx", ["remotion", "render", "index.ts", format, outPath], {
+      cwd: remotionDir,
+      shell: process.platform === "win32",
+    });
+
+    let stderrOutput = "";
+    let stdoutBuffer = "";
+
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdoutBuffer += chunk.toString();
+      const lines = stdoutBuffer.split("\n");
+      stdoutBuffer = lines.pop() ?? "";
+      for (const line of lines) {
+        const match = line.match(RENDERED_LINE);
+        if (match && onProgress) {
+          onProgress(parseInt(match[1], 10), parseInt(match[2], 10));
+        }
+      }
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderrOutput += chunk.toString();
+    });
+
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`Remotion render (${format}) exited with code ${code}\n${stderrOutput}`));
+    });
+  });
+}
+
 /**
  * Renders both the 16:9 (YouTube long-form) and 9:16 (Shorts) compositions
  * via the Remotion CLI, using the video's own remotion.config.ts.
@@ -58,6 +97,7 @@ export async function renderVideo({
   visualsDir,
   filenameStem,
   formats = ["horizontal", "vertical"],
+  onRenderProgress,
 }: RenderVideoOptions): Promise<string[]> {
   fs.mkdirSync(outDir, { recursive: true });
   syncAssetsToPublic({ slug, audioDir, visualsDir });
@@ -65,10 +105,8 @@ export async function renderVideo({
 
   for (const format of formats) {
     const outPath = path.join(outDir, `${filenameStem}_${FORMAT_SUFFIX[format]}.mp4`);
-    await execFileAsync(
-      "npx",
-      ["remotion", "render", "index.ts", format, outPath],
-      { cwd: remotionDir, maxBuffer: 1024 * 1024 * 64 }
+    await runRemotionRender(remotionDir, format, outPath, (done, total) =>
+      onRenderProgress?.(format, done, total)
     );
     outputPaths.push(outPath);
   }

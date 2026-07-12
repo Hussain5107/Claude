@@ -15,8 +15,10 @@ cache/stock-footage/**
 !cache/stock-footage/.gitkeep
 
 # Remotion asset staging area (render.ts copies each video's finalized audio/
-# visuals in here per slug right before rendering — see cli/commands/render.ts)
-public/
+# visuals in here per slug right before rendering — see cli/commands/render.ts).
+# Anchored to the project root (leading slash) so it doesn't also match
+# web/public/, which is the web UI's real, tracked frontend source.
+/public/
 
 # OS / editor
 .DS_Store

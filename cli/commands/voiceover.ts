@@ -14,6 +14,8 @@ export interface RenderVoiceoverOptions {
   segmentsDir: string;
   narrationOutPath: string;
   config: PipelineConfig;
+  /** Called after each segment (narration or pause) finishes — narration segments are the slow, CPU-bound ones worth surfacing progress for. */
+  onSegmentDone?: (done: number, total: number, segment: ScriptSegment) => void;
 }
 
 /**
@@ -29,6 +31,7 @@ export async function renderVoiceover({
   segmentsDir,
   narrationOutPath,
   config,
+  onSegmentDone,
 }: RenderVoiceoverOptions): Promise<void> {
   fs.mkdirSync(segmentsDir, { recursive: true });
   const segmentFiles: string[] = [];
@@ -38,7 +41,8 @@ export async function renderVoiceover({
   const hasNarration = segments.some((s) => s.type === "narration");
   const voiceId = hasNarration ? await resolveVoiceId(baseUrl, voiceName) : -1;
 
-  for (const segment of segments) {
+  for (let i = 0; i < segments.length; i++) {
+    const segment = segments[i];
     const filePath = path.join(
       segmentsDir,
       `${String(segment.order).padStart(3, "0")}-${segment.type}.wav`
@@ -52,6 +56,7 @@ export async function renderVoiceover({
 
     segment.duration = await getAudioDurationSeconds(filePath);
     segmentFiles.push(filePath);
+    onSegmentDone?.(i + 1, segments.length, segment);
   }
 
   await concatAudioFiles(segmentFiles, narrationOutPath);

@@ -10,7 +10,20 @@ export async function getAudioDurationSeconds(filePath: string): Promise<number>
   return new Promise((resolve, reject) => {
     ffmpeg.ffprobe(filePath, (err, data) => {
       if (err) return reject(err);
-      resolve(data.format.duration ?? 0);
+      // ffprobe reports "N/A" (a string, not null/undefined) when it can't
+      // determine duration — e.g. an empty/corrupt audio file. Left
+      // unvalidated, that string silently propagates as a segment "duration"
+      // and only surfaces much later as a cryptic NaN in Remotion's render.
+      const raw = data.format.duration;
+      const duration = typeof raw === "number" ? raw : Number(raw);
+      if (!Number.isFinite(duration)) {
+        throw new Error(
+          `ffprobe could not determine a valid duration for ${filePath} (got ${JSON.stringify(
+            raw
+          )}) — the audio file is likely empty or corrupt.`
+        );
+      }
+      resolve(duration);
     });
   });
 }

@@ -8,7 +8,14 @@ Claude, synthesizes voiceover in your own cloned voice via a locally running
 [Voiceover engine](#voiceover-engine-zahra-studio) below), sources varied
 background footage via Pexels/Pixabay (or your own clips), mixes in ducked
 ambient music, and renders finished MP4s in both 16:9 (long-form) and 9:16
-(Shorts) — plus a YouTube metadata file ready to paste in on upload.
+(YouTube Shorts, Instagram Reels, TikTok — same aspect ratio) — plus a
+YouTube metadata file ready to paste in on upload. Script and metadata
+generation can also be done manually (e.g. in a separate Claude chat) instead
+of calling the Anthropic API — see `--script-file` / `--metadata-file` below.
+
+Drive it from the command line (`meditate create ...`), or run
+`npm run meditate -- web` for a local browser UI that walks through the same
+steps with live progress — see [Web UI](#web-ui) below.
 
 See `PROJECT_STRUCTURE.md`-style notes below for how everything is laid out,
 and the compliance notes at the bottom for why the pipeline is built this way.
@@ -104,15 +111,60 @@ photos into `videos/<theme-slug>-<date>/visuals/custom/` before running (or
 between steps, if you're driving the pipeline manually) — custom footage is
 always preferred over stock footage.
 
+### Generating without any Anthropic API key
+
+Both AI-generated steps can be replaced with manually-written content —
+useful if you write scripts in a separate Claude chat and don't want an API
+key in the loop at all:
+
+```sh
+npm run meditate -- create "morning gratitude meditation" --duration 900 \
+  --script-file path/to/script.txt \
+  --metadata-file path/to/metadata.json
+```
+
+- `--script-file`: plain text, paragraphs (blank line between them) become
+  narration sections. Runs the compliance inspector automatically first and
+  refuses to proceed on a hard `FAIL` (override with `--skip-inspection`).
+- `--metadata-file`: a JSON file shaped
+  `{"title", "description", "tags": [...], "chapterTitles": [...]}`.
+  Chapter timestamps are still computed locally from the real segment
+  durations either way — only the AI text-generation call is skipped.
+
+Omit either flag to have that step call Claude as usual.
+
+## Web UI
+
+```sh
+npm run web
+```
+
+Opens a local server at `http://localhost:4300` with the same pipeline in a
+browser: fill in theme/duration/format, paste a script (with a button to copy
+a ready-made script-writing prompt for a separate Claude chat), run the
+compliance inspector inline, paste metadata JSON (with its own copy-prompt
+button), then click Generate and watch live progress — step-by-step status,
+per-segment voiceover progress, and per-frame render progress — via
+server-sent events. A gallery at the bottom lists every past video with
+inline players and download links.
+
+Nothing here calls Claude directly (same manual-script/metadata workflow as
+the CLI) — it only replaces the terminal/copy-paste friction. It does not
+reduce Zahra Studio's CPU-bound generation time.
+
 ## Project layout
 
 ```
 meditation-pipeline/
 ├── cli/                    # the CLI tool (commands + shared lib utilities)
 │   ├── index.ts            # entry point: `meditate create <theme> ...`
-│   ├── commands/           # one module per pipeline stage
+│   ├── commands/           # one module per pipeline stage + pipeline.ts (shared orchestrator)
 │   ├── lib/                # API clients, ffmpeg wrappers, config loading
 │   └── templates/          # Remotion project template copied per video
+├── web/                     # local browser UI (`npm run web`), reuses cli/commands/pipeline.ts
+│   ├── server.ts             # Express + SSE progress streaming
+│   ├── start.ts              # entry point
+│   └── public/                # vanilla HTML/CSS/JS frontend
 ├── shared/
 │   ├── remotion-components/  # reusable Ken Burns / subtitle / intro / audio components
 │   ├── branding/

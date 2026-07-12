@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Meditation Video Pipeline</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Meditation Video Pipeline</h1>
+    <p class="subtitle">Paste a script, inspect it, generate metadata, and render the video — all local, no API keys.</p>
+  </header>
+
+  <section class="card">
+    <h2>1. Setup</h2>
+    <div class="row">
+      <label>Theme
+        <input id="theme" type="text" placeholder="morning gratitude meditation" />
+      </label>
+      <label>Duration (seconds)
+        <input id="duration" type="number" value="900" step="60" min="60" />
+      </label>
+      <label>Format
+        <select id="format">
+          <option value="both">Both (16:9 + 9:16)</option>
+          <option value="16x9">16:9 (YouTube long-form)</option>
+          <option value="9x16">9:16 (Shorts / Reels / TikTok)</option>
+        </select>
+      </label>
+      <label>Music track (optional path)
+        <input id="musicPath" type="text" placeholder="leave blank to pick randomly from assets/music" />
+      </label>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>2. Script</h2>
+    <p class="hint">Write your script in a separate Claude chat, then paste it here. Paragraphs (blank line between them) become narration sections.</p>
+    <div class="button-row">
+      <button id="copyScriptPrompt" class="secondary">Copy script-writing prompt</button>
+    </div>
+    <textarea id="scriptText" rows="12" placeholder="Paste your meditation script here — one paragraph per section, separated by a blank line."></textarea>
+    <div class="button-row">
+      <button id="runInspection">Run compliance inspection</button>
+    </div>
+    <div id="inspectionReport" class="report"></div>
+  </section>
+
+  <section class="card">
+    <h2>3. Metadata</h2>
+    <p class="hint">Copy the prompt below (it auto-fills your script's sections), run it in the same Claude chat, then paste the raw JSON response here.</p>
+    <div class="button-row">
+      <button id="copyMetadataPrompt" class="secondary">Copy metadata-writing prompt</button>
+    </div>
+    <textarea id="metadataJson" rows="8" placeholder='{"title": "...", "description": "...", "tags": [...], "chapterTitles": [...]}'></textarea>
+    <div id="metadataStatus" class="hint"></div>
+  </section>
+
+  <section class="card">
+    <h2>4. Generate</h2>
+    <label class="checkbox-row">
+      <input type="checkbox" id="skipInspection" />
+      Generate anyway even if inspection reports a hard FAIL (not recommended)
+    </label>
+    <div class="button-row">
+      <button id="generateBtn" class="primary">Generate video</button>
+    </div>
+    <div id="progress" class="progress"></div>
+  </section>
+
+  <section class="card">
+    <h2>Past videos</h2>
+    <div id="videoGallery" class="gallery"></div>
+  </section>
+</div>
+<script src="/app.js"></script>
+</body>
+</html>

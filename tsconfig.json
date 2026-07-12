@@ -15,6 +15,6 @@
     "allowJs": false,
     "outDir": "dist"
   },
-  "include": ["cli", "shared"],
+  "include": ["cli", "shared", "web"],
   "exclude": ["node_modules", "**/out", "**/dist", "cli/templates", "videos"]
 }
