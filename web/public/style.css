@@ -1,0 +1,223 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f4f1ea;
+  --card-bg: #ffffff;
+  --text: #1a1a1a;
+  --muted: #6b6b6b;
+  --border: #e0dcd2;
+  --accent: #c9a876;
+  --accent-dark: #8a6d3f;
+  --ok: #3a7d44;
+  --warn: #b8860b;
+  --fail: #b02a2a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b0e14;
+    --card-bg: #161a22;
+    --text: #f0ede4;
+    --muted: #9a9a9a;
+    --border: #2a2f3a;
+    --accent: #c9a876;
+    --accent-dark: #e0c090;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: Georgia, "Segoe UI", serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+}
+
+header h1 {
+  margin-bottom: 0.25rem;
+  letter-spacing: 0.5px;
+}
+
+.subtitle {
+  color: var(--muted);
+  margin-top: 0;
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.card h2 {
+  margin-top: 0;
+  font-size: 1.1rem;
+  border-bottom: 2px solid var(--accent);
+  display: inline-block;
+  padding-bottom: 0.2rem;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.85rem;
+  color: var(--muted);
+  gap: 0.3rem;
+}
+
+input[type="text"],
+input[type="number"],
+select,
+textarea {
+  font-family: inherit;
+  font-size: 0.95rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  width: 100%;
+}
+
+textarea {
+  width: 100%;
+  resize: vertical;
+  margin-top: 0.5rem;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin-bottom: 0.75rem;
+}
+.checkbox-row input { width: auto; }
+
+.button-row {
+  margin: 0.75rem 0;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+button {
+  font-family: inherit;
+  font-size: 0.9rem;
+  padding: 0.55rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #241a0e;
+  cursor: pointer;
+}
+button.secondary {
+  background: transparent;
+  color: var(--accent-dark);
+}
+button.primary {
+  font-weight: bold;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.report, .progress {
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.finding {
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  margin-bottom: 0.4rem;
+  border-left: 4px solid var(--border);
+}
+.finding.fail { border-color: var(--fail); background: color-mix(in srgb, var(--fail) 12%, transparent); }
+.finding.warn { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.finding.info { border-color: var(--muted); background: color-mix(in srgb, var(--muted) 10%, transparent); }
+
+.verdict {
+  font-weight: bold;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+  display: inline-block;
+  margin-bottom: 0.5rem;
+}
+.verdict.pass { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok); }
+.verdict.needs_review { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
+.verdict.fail { background: color-mix(in srgb, var(--fail) 20%, transparent); color: var(--fail); }
+
+.step-line {
+  padding: 0.25rem 0;
+}
+.step-line.active { color: var(--accent-dark); font-weight: bold; }
+.step-line.complete { color: var(--muted); }
+
+.progress-bar-track {
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 0.3rem 0 0.6rem;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.video-tile {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.75rem;
+}
+.video-tile h3 {
+  font-size: 0.95rem;
+  margin: 0 0 0.4rem;
+}
+.video-tile video {
+  width: 100%;
+  border-radius: 6px;
+  margin-bottom: 0.4rem;
+  background: #000;
+}
+.video-tile a {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--accent-dark);
+  margin-bottom: 0.2rem;
+}
+
+.empty {
+  color: var(--muted);
+  font-style: italic;
+}
