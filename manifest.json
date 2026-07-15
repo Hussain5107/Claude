@@ -1,0 +1,15 @@
+{
+  "name": "The Sisters' Dream Town",
+  "short_name": "Dream Town",
+  "description": "A magical educational adventure for Hirra, Amal Zahra and Meezab Rahma.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#fff4fb",
+  "theme_color": "#ff7ab8",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

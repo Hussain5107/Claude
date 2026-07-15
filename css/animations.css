@@ -1,0 +1,99 @@
+@keyframes screenFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.85) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes bounceIn {
+  0% { transform: scale(0.3); opacity: 0; }
+  50% { transform: scale(1.08); opacity: 1; }
+  70% { transform: scale(0.94); }
+  100% { transform: scale(1); }
+}
+@keyframes floatY {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-4deg); }
+  75% { transform: rotate(4deg); }
+}
+@keyframes sparkle {
+  0%, 100% { opacity: 0; transform: scale(0.5) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1.1) rotate(180deg); }
+}
+@keyframes coinFly {
+  0% { transform: translate(var(--fx-x0, 0), var(--fx-y0, 0)) scale(1); opacity: 1; }
+  100% { transform: translate(var(--fx-x1, 0), var(--fx-y1, -60px)) scale(0.4); opacity: 0; }
+}
+@keyframes confettiFall {
+  0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(110vh) rotate(540deg); opacity: 0.9; }
+}
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 209, 102, 0.6); }
+  50% { box-shadow: 0 0 0 12px rgba(255, 209, 102, 0); }
+}
+@keyframes shimmerBar {
+  0% { background-position: -200px 0; }
+  100% { background-position: 200px 0; }
+}
+@keyframes shakeNo {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+.anim-float { animation: floatY 3.2s ease-in-out infinite; }
+.anim-wiggle:hover { animation: wiggle 0.5s ease-in-out; }
+.anim-pop { animation: bounceIn var(--duration-slow) var(--ease-bounce); }
+.anim-pulse { animation: pulseGlow 1.8s ease-in-out infinite; }
+.anim-shake { animation: shakeNo 0.45s ease-in-out; }
+
+.fx-layer {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: var(--z-celebration);
+  overflow: hidden;
+}
+.fx-coin {
+  position: absolute;
+  font-size: 28px;
+  animation: coinFly 700ms ease-in forwards;
+}
+.fx-confetti {
+  position: absolute;
+  top: -20px;
+  width: 10px; height: 16px;
+  border-radius: 3px;
+  animation: confettiFall 2.4s linear forwards;
+}
+.fx-sparkle {
+  position: absolute;
+  animation: sparkle 900ms ease-in-out;
+}
+
+.celebration-overlay {
+  position: fixed; inset: 0;
+  background: rgba(80, 40, 90, 0.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: var(--z-celebration);
+  animation: fadeIn var(--duration-normal);
+}
+.celebration-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-7);
+  text-align: center;
+  box-shadow: var(--shadow-lg);
+  animation: bounceIn var(--duration-slow) var(--ease-bounce);
+  max-width: 420px;
+}

@@ -1,0 +1,46 @@
+/* Mobile-first base already assumes small screens. Scale up from there. */
+
+/* Small phones */
+@media (max-width: 420px) {
+  :root { --font-size-base: 16px; }
+  .profile-card { width: 42vw; min-width: 130px; }
+  .celebration-card { padding: var(--space-5); }
+}
+
+/* Tablets (primary target) */
+@media (min-width: 700px) {
+  :root { --font-size-base: 19px; }
+  .village-map { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+  .minigame-options { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Large tablets / desktop */
+@media (min-width: 1024px) {
+  .village-map { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  .avatar-editor { flex-wrap: nowrap; }
+  .minigame-options { grid-template-columns: repeat(4, 1fr); }
+}
+
+/* Landscape orientation optimizations for tablets */
+@media (orientation: landscape) and (max-height: 600px) {
+  .profile-select { padding: var(--space-4); gap: var(--space-3); }
+  .profile-select__title { font-size: var(--font-size-xl); }
+  .minigame-stage { gap: var(--space-3); padding: var(--space-3); }
+  .house-body { flex-direction: row; }
+}
+
+/* Portrait phones: stack house editor catalog under canvas */
+@media (max-width: 640px) and (orientation: portrait) {
+  .house-body { flex-direction: column; }
+  .house-catalog { max-width: none; max-height: 140px; }
+}
+
+/* Touch target safety net on coarse pointers */
+@media (pointer: coarse) {
+  .btn, .option-btn, .tile, .key { min-height: 48px; }
+}
+
+/* Print / export report */
+@media print {
+  .hud, .village-footer, .btn { display: none !important; }
+}

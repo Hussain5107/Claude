@@ -1,0 +1,93 @@
+/* Design tokens for The Sisters' Dream Town */
+:root {
+  /* Brand palette — soft, saturated, Disney-inspired pastels */
+  --color-primary: #ff7ab8;
+  --color-primary-dark: #e85ba0;
+  --color-secondary: #7fd8ff;
+  --color-secondary-dark: #4fb8e8;
+  --color-accent: #ffd166;
+  --color-accent-dark: #f4b93d;
+  --color-success: #6fd88a;
+  --color-success-dark: #4cbf6a;
+  --color-danger: #ff9a8b;
+  --color-purple: #b48cff;
+  --color-purple-dark: #9468f0;
+
+  --color-bg-1: #fff4fb;
+  --color-bg-2: #f0f9ff;
+  --color-bg-3: #fffaf0;
+  --color-surface: #ffffff;
+  --color-surface-soft: #fbf7ff;
+  --color-text: #4a3a5a;
+  --color-text-soft: #8577a0;
+  --color-text-inverse: #ffffff;
+  --color-border: #ecdcf5;
+
+  --gradient-sky: linear-gradient(160deg, #fdf1ff 0%, #eaf7ff 55%, #fff8ea 100%);
+  --gradient-primary: linear-gradient(135deg, #ff9ecb 0%, #ff7ab8 100%);
+  --gradient-secondary: linear-gradient(135deg, #a6e9ff 0%, #7fd8ff 100%);
+  --gradient-accent: linear-gradient(135deg, #ffe08a 0%, #ffd166 100%);
+  --gradient-purple: linear-gradient(135deg, #d3bbff 0%, #b48cff 100%);
+  --gradient-success: linear-gradient(135deg, #9beeae 0%, #6fd88a 100%);
+
+  --radius-sm: 10px;
+  --radius-md: 18px;
+  --radius-lg: 28px;
+  --radius-pill: 999px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  --shadow-sm: 0 2px 8px rgba(120, 70, 140, 0.12);
+  --shadow-md: 0 8px 24px rgba(120, 70, 140, 0.16);
+  --shadow-lg: 0 16px 40px rgba(120, 70, 140, 0.22);
+  --shadow-glow-primary: 0 0 0 4px rgba(255, 122, 184, 0.25);
+
+  --font-family: "Baloo 2", "Quicksand", "Nunito", ui-rounded, "Segoe UI Rounded", system-ui, sans-serif;
+  --font-size-base: 18px;
+  --font-size-sm: 0.85em;
+  --font-size-lg: 1.25em;
+  --font-size-xl: 1.75em;
+  --font-size-xxl: 2.5em;
+
+  --duration-fast: 150ms;
+  --duration-normal: 280ms;
+  --duration-slow: 500ms;
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --touch-target: 56px;
+  --z-hud: 10;
+  --z-modal: 100;
+  --z-toast: 200;
+  --z-celebration: 300;
+}
+
+/* High contrast accessibility theme */
+[data-contrast="high"] {
+  --color-bg-1: #ffffff;
+  --color-bg-2: #ffffff;
+  --color-bg-3: #ffffff;
+  --gradient-sky: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f4f4f4;
+  --color-text: #000000;
+  --color-text-soft: #222222;
+  --color-border: #000000;
+  --color-primary: #c2005a;
+  --color-secondary: #005a9e;
+  --color-accent: #a86a00;
+  --shadow-sm: 0 0 0 2px #000;
+  --shadow-md: 0 0 0 2px #000;
+  --shadow-lg: 0 0 0 2px #000;
+}
+
+[data-text-size="large"] {
+  --font-size-base: 22px;
+}
