@@ -90,6 +90,13 @@ def submit_narration(
     first if unsure what's available. language is an ISO code (e.g. "en",
     "es", "fr"); omit exaggeration/cfg_weight to use that voice's saved
     defaults if it has any.
+
+    Mixed-language scripts: wrap a section in [xx]...[/xx] to speak just
+    that part in a different language than the rest, e.g.
+    "Hello there. [fr]Bonjour tout le monde.[/fr] [es]Hola a todos.[/es]" --
+    untagged text uses `language`. Only tag languages the model actually
+    supports (see list_voices/the app's language list; currently English,
+    French, Spanish and 20 others, but notably not Urdu or Pashto).
     """
     voice = _find_voice(voice_name)
     if voice is None:

@@ -24,6 +24,11 @@ def test_estimate_duration_counts_words():
     assert "1.0 min" in result
 
 
+def test_estimate_duration_ignores_language_tag_markup():
+    result = gradio_app.estimate_duration("Hi. [fr]Bonjour le monde.[/fr] Bye.")
+    assert "5 words" in result  # tags themselves aren't counted as words
+
+
 def test_add_to_queue_rejects_empty_text(monkeypatch):
     monkeypatch.setattr(gradio_app, "_voice_label_for_id", lambda vid: "Alice")
     queue, table, msg, cleared_text = gradio_app.add_to_queue("   ", 1, "English", 0.5, 0.5, [])

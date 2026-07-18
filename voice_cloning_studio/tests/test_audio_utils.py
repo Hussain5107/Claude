@@ -36,6 +36,53 @@ def test_chunk_text_empty_input():
     assert audio_utils.chunk_text("   \n\n  ") == []
 
 
+def test_parse_language_segments_no_tags_returns_single_default_segment():
+    segments = audio_utils.parse_language_segments("Just plain English text.", "en")
+    assert segments == [("en", "Just plain English text.")]
+
+
+def test_parse_language_segments_splits_tagged_and_untagged():
+    text = "Hello there. [fr]Bonjour le monde.[/fr] Back to English now."
+    segments = audio_utils.parse_language_segments(text, "en")
+    assert segments == [
+        ("en", "Hello there. "),
+        ("fr", "Bonjour le monde."),
+        ("en", " Back to English now."),
+    ]
+
+
+def test_parse_language_segments_multiple_tags():
+    text = "[en]Hello.[/en][fr]Bonjour.[/fr][es]Hola.[/es]"
+    segments = audio_utils.parse_language_segments(text, "en")
+    assert segments == [("en", "Hello."), ("fr", "Bonjour."), ("es", "Hola.")]
+
+
+def test_parse_language_segments_is_case_insensitive_on_tag_name():
+    text = "[FR]Bonjour[/FR]"
+    segments = audio_utils.parse_language_segments(text, "en")
+    assert segments == [("fr", "Bonjour")]
+
+
+def test_strip_language_tags_removes_markup_keeps_text():
+    text = "Hello. [fr]Bonjour le monde.[/fr] Goodbye."
+    assert audio_utils.strip_language_tags(text) == "Hello. Bonjour le monde. Goodbye."
+
+
+def test_chunk_text_with_languages_stamps_correct_language_per_chunk():
+    text = "This is English.\n\n[fr]Ceci est en francais.[/fr]\n\n[es]Esto es en espanol.[/es]"
+    chunks = audio_utils.chunk_text_with_languages(text, default_language="en")
+    languages = [c.language_id for c in chunks]
+    assert languages == ["en", "fr", "es"]
+    assert "English" in chunks[0].text
+    assert "francais" in chunks[1].text
+    assert "espanol" in chunks[2].text
+
+
+def test_chunk_text_with_languages_untagged_script_all_default():
+    chunks = audio_utils.chunk_text_with_languages("Just one plain sentence.", default_language="es")
+    assert all(c.language_id == "es" for c in chunks)
+
+
 def test_generate_long_form_rejects_empty_text(tmp_path):
     with pytest.raises(InvalidTextError):
         audio_utils.generate_long_form("", "/fake/embedding.pt", tmp_path / "out.wav")
@@ -88,6 +135,33 @@ def test_generate_long_form_calls_progress_callback(tmp_path, monkeypatch):
     assert progress_calls[-1][0] == progress_calls[-1][1]  # final call reports done == total
     assert len(cues) == len(calls)
     assert out_path.exists()  # streamed directly, no post-processing enabled
+
+
+def test_generate_long_form_routes_each_chunk_to_its_tagged_language(tmp_path, monkeypatch):
+    from backend import tts_engine
+    from backend.config import settings
+
+    monkeypatch.setattr(settings, "enable_loudness_normalization", False)
+    monkeypatch.setattr(settings, "enable_silence_trim", False)
+
+    calls = []  # (text, language_id) pairs actually sent to the model
+
+    def fake_generate_chunk(text, conditionals, language_id="en", **kwargs):
+        calls.append((text, language_id))
+        wav = torch.full((int(0.2 * SAMPLE_RATE),), 0.5, dtype=torch.float32)
+        return wav, SAMPLE_RATE, False
+
+    monkeypatch.setattr(tts_engine, "load_conditionals", lambda path: "fake-conds")
+    monkeypatch.setattr(tts_engine, "generate_chunk", fake_generate_chunk)
+
+    text = "This is English.\n\n[fr]Ceci est en francais.[/fr]\n\n[es]Esto es en espanol.[/es]"
+    audio_utils.generate_long_form(text, "/fake/embedding.pt", tmp_path / "out.wav", language_id="en")
+
+    languages_used = [lang for _text, lang in calls]
+    assert languages_used == ["en", "fr", "es"]
+    assert "English" in calls[0][0]
+    assert "francais" in calls[1][0]
+    assert "espanol" in calls[2][0]
 
 
 def test_generate_long_form_captions_are_sequential_and_nonoverlapping(tmp_path, monkeypatch):

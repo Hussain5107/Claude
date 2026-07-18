@@ -23,6 +23,7 @@ ProgressCallback = Callable[[int, int], None]
 class TextChunk:
     text: str
     is_paragraph_end: bool
+    language_id: str = "en"
 
 
 @dataclass
@@ -30,6 +31,41 @@ class CaptionCue:
     start: float
     end: float
     text: str
+
+
+LANGUAGE_TAG_PATTERN = re.compile(r"\[(\w{2})\](.*?)\[/\1\]", re.IGNORECASE | re.DOTALL)
+
+
+def strip_language_tags(text: str) -> str:
+    """Removes [xx]...[/xx] markup, leaving just the spoken text -- for word
+    counts/estimates where the tags themselves shouldn't be counted."""
+    return LANGUAGE_TAG_PATTERN.sub(lambda m: m.group(2), text)
+
+
+def parse_language_segments(text: str, default_language: str) -> list[tuple[str, str]]:
+    """Splits a script on inline [en]...[/en] / [fr]...[/fr] / [es]...[/es] tags for
+    mixed-language scripts. Untagged text uses default_language. Returns
+    (language_id, text) segments in original order; a script with no tags at
+    all returns a single segment, unchanged from before this feature existed."""
+    segments: list[tuple[str, str]] = []
+    pos = 0
+    for match in LANGUAGE_TAG_PATTERN.finditer(text):
+        if match.start() > pos:
+            preceding = text[pos:match.start()]
+            if preceding.strip():
+                segments.append((default_language, preceding))
+        lang = match.group(1).lower()
+        inner = match.group(2)
+        if inner.strip():
+            segments.append((lang, inner))
+        pos = match.end()
+    if pos < len(text):
+        trailing = text[pos:]
+        if trailing.strip():
+            segments.append((default_language, trailing))
+    if not segments:
+        segments = [(default_language, text)]
+    return segments
 
 
 def chunk_text(text: str, max_chars: int | None = None) -> list[TextChunk]:
@@ -51,6 +87,20 @@ def chunk_text(text: str, max_chars: int | None = None) -> list[TextChunk]:
 
         for j, chunk in enumerate(para_chunks):
             chunks.append(TextChunk(text=chunk, is_paragraph_end=j == len(para_chunks) - 1))
+    return chunks
+
+
+def chunk_text_with_languages(
+    text: str, default_language: str, max_chars: int | None = None
+) -> list[TextChunk]:
+    """Like chunk_text, but resolves [xx]...[/xx] language tags first and
+    stamps each resulting chunk with the language it should be spoken in."""
+    chunks: list[TextChunk] = []
+    for language_id, segment in parse_language_segments(text, default_language):
+        segment_chunks = chunk_text(segment, max_chars)
+        for chunk in segment_chunks:
+            chunk.language_id = language_id
+        chunks.extend(segment_chunks)
     return chunks
 
 
@@ -118,6 +168,12 @@ def generate_long_form(
     Calls ``on_progress(done, total)`` after each chunk. If ``profile`` is
     given, per-stage timings are recorded into it.
 
+    Mixed-language scripts: wrap a section in [xx]...[/xx] (e.g. [fr]Bonjour[/fr])
+    to speak it in a different language than the rest -- untagged text uses
+    ``language_id``. Each tagged language must be one of Chatterbox's
+    supported languages (get_supported_languages()); an unsupported tag
+    surfaces as a clear error from the model itself when that chunk generates.
+
     Returns caption cues timed against the actual final audio.
     """
     if len(text) > settings.max_text_chars:
@@ -126,7 +182,7 @@ def generate_long_form(
             f"{settings.max_text_chars}. Split it into multiple generations."
         )
 
-    chunks = chunk_text(text)
+    chunks = chunk_text_with_languages(text, language_id)
     if not chunks:
         raise InvalidTextError("No text to synthesize")
 
@@ -140,7 +196,7 @@ def generate_long_form(
     needs_postprocess = settings.enable_silence_trim or settings.enable_loudness_normalization
     generate_fn = _generate_buffered if needs_postprocess else _generate_streamed
     cues, cumulative_sec, write_sec, postprocess_sec = generate_fn(
-        chunks, conditionals, out_path, language_id, exaggeration, cfg_weight, on_progress, profile
+        chunks, conditionals, out_path, exaggeration, cfg_weight, on_progress, profile
     )
 
     if profile:
@@ -152,7 +208,7 @@ def generate_long_form(
 
 
 def _generate_streamed(
-    chunks, conditionals, out_path, language_id, exaggeration, cfg_weight, on_progress, profile
+    chunks, conditionals, out_path, exaggeration, cfg_weight, on_progress, profile
 ) -> tuple[list[CaptionCue], float, float, float]:
     """No post-processing needed: stream each chunk directly to out_path."""
     writer: wave.Wave_write | None = None
@@ -164,7 +220,7 @@ def _generate_streamed(
     try:
         for i, chunk in enumerate(chunks):
             wav, sample_rate, truncated = _generate_one_chunk(
-                chunk, conditionals, language_id, exaggeration, cfg_weight, profile
+                chunk, conditionals, exaggeration, cfg_weight, profile
             )
             if truncated:
                 truncated_count += 1
@@ -190,7 +246,7 @@ def _generate_streamed(
 
 
 def _generate_buffered(
-    chunks, conditionals, out_path, language_id, exaggeration, cfg_weight, on_progress, profile
+    chunks, conditionals, out_path, exaggeration, cfg_weight, on_progress, profile
 ) -> tuple[list[CaptionCue], float, float, float]:
     """Post-processing needed: keep chunks as in-memory tensors (avoids a
     wasteful disk round-trip since we need a full in-memory view anyway)."""
@@ -202,7 +258,7 @@ def _generate_buffered(
 
     for i, chunk in enumerate(chunks):
         wav, sample_rate, truncated = _generate_one_chunk(
-            chunk, conditionals, language_id, exaggeration, cfg_weight, profile
+            chunk, conditionals, exaggeration, cfg_weight, profile
         )
         if truncated:
             truncated_count += 1
@@ -235,11 +291,11 @@ def _generate_buffered(
     return cues, cumulative_sec, 0.0, t["elapsed"]
 
 
-def _generate_one_chunk(chunk, conditionals, language_id, exaggeration, cfg_weight, profile):
+def _generate_one_chunk(chunk, conditionals, exaggeration, cfg_weight, profile):
     with stage_timer() as t:
         result = tts_engine.generate_chunk(
             chunk.text, conditionals,
-            language_id=language_id, exaggeration=exaggeration, cfg_weight=cfg_weight,
+            language_id=chunk.language_id, exaggeration=exaggeration, cfg_weight=cfg_weight,
         )
     if profile:
         profile.chunk_generate_sec.append(t["elapsed"])

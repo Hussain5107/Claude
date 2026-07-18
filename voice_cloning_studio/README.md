@@ -193,6 +193,14 @@ see `.github/workflows/voice_cloning_studio-ci.yml`.
   actual generated audio duration of each chunk (not guessed from text
   length), so timing is accurate without needing a separate speech-to-text
   pass.
+- **Mixed-language scripts:** wrap a section in `[xx]...[/xx]` to speak just
+  that part in a different language than the rest, e.g. `Hello there.
+  [fr]Bonjour tout le monde.[/fr] [es]Hola a todos.[/es]`. Untagged text uses
+  whichever language is selected for the generation. Each tagged language
+  must be one supported by Chatterbox (23 languages -- see `GET /languages`
+  or the app's Language dropdown; notably this does **not** include Urdu or
+  Pashto, which the underlying model has no support for at all, cloned
+  voice or otherwise).
 
 ## Performance
 

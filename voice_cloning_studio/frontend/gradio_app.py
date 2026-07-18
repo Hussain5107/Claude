@@ -1,4 +1,5 @@
 import os
+import re
 import time
 from pathlib import Path
 
@@ -129,8 +130,12 @@ def delete_voice(voice_id):
     return "Voice deleted.", gr.update(choices=fetch_voice_choices(), value=None)
 
 
+_LANGUAGE_TAG_PATTERN = re.compile(r"\[(\w{2})\](.*?)\[/\1\]", re.IGNORECASE | re.DOTALL)
+
+
 def estimate_duration(text: str) -> str:
-    words = len((text or "").split())
+    spoken_text = _LANGUAGE_TAG_PATTERN.sub(lambda m: m.group(2), text or "")
+    words = len(spoken_text.split())
     minutes = words / WORDS_PER_MINUTE
     return f"{words} words -- approx {minutes:.1f} min narrated (estimate, actual pace varies)"
 
@@ -428,6 +433,13 @@ with gr.Blocks(title="Zahra Studio") as demo:
         gr.Markdown(
             "Already found good settings in **Test Voice**? Use *Copy from Test Voice* below "
             "instead of resetting the sliders. Picking a voice with saved defaults auto-fills them too."
+        )
+        gr.Markdown(
+            "**Mixed-language scripts:** wrap a section in `[xx]...[/xx]` to speak it in a "
+            "different language than the rest -- e.g. "
+            "`Hello there. [fr]Bonjour tout le monde.[/fr] [es]Hola a todos.[/es]`. "
+            "Untagged text uses whatever language is selected below. Only languages the model "
+            "actually supports can be tagged (see the Language dropdown for the full list)."
         )
         copy_from_test_btn = gr.Button("Copy voice + settings from Test Voice")
 
