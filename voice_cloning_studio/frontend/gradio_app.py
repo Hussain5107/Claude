@@ -133,6 +133,24 @@ def delete_voice(voice_id):
 _LANGUAGE_TAG_PATTERN = re.compile(r"\[(\w{2})\](.*?)\[/\1\]", re.IGNORECASE | re.DOTALL)
 
 
+def _progress_bar_html(percent: float, label: str = "") -> str:
+    """A dedicated, always-visible progress bar -- Gradio's built-in gr.Progress()
+    renders as a subtle overlay on the button that's easy to miss, so this
+    gives a clear percentage readout regardless of theme."""
+    pct = max(0.0, min(100.0, percent))
+    return f"""
+    <div style="margin: 6px 0;">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
+        <span>{label}</span><span><b>{pct:.0f}%</b></span>
+      </div>
+      <div style="width:100%;background:rgba(128,128,128,0.25);border-radius:8px;
+                  overflow:hidden;height:16px;">
+        <div style="width:{pct}%;background:#4f8cff;height:100%;transition:width 0.3s;"></div>
+      </div>
+    </div>
+    """
+
+
 def estimate_duration(text: str) -> str:
     spoken_text = _LANGUAGE_TAG_PATTERN.sub(lambda m: m.group(2), text or "")
     words = len(spoken_text.split())
@@ -181,17 +199,18 @@ def _download_captions(job_id: str, out_path: str) -> None:
 
 def test_voice_generate(text, voice_id, language_label, exaggeration, cfg_weight, progress=gr.Progress()):
     if not text.strip():
-        yield None, "Enter some test text first."
+        yield None, "Enter some test text first.", _progress_bar_html(0, "Idle")
         return
     if voice_id is None:
-        yield None, "Pick a voice first."
+        yield None, "Pick a voice first.", _progress_bar_html(0, "Idle")
         return
 
     progress(0, desc="Queuing test...")
+    yield None, "Queuing...", _progress_bar_html(0, "Queuing")
     try:
         job_id = _submit_generation(text, voice_id, language_label, exaggeration, cfg_weight)
     except (requests.RequestException, RuntimeError) as e:
-        yield None, f"Could not start test: {e}"
+        yield None, f"Could not start test: {e}", _progress_bar_html(0, "Failed to start")
         return
 
     while True:
@@ -199,7 +218,7 @@ def test_voice_generate(text, voice_id, language_label, exaggeration, cfg_weight
         try:
             job = _poll_job(job_id)
         except requests.RequestException as e:
-            yield None, f"Lost connection to backend: {e}"
+            yield None, f"Lost connection to backend: {e}", _progress_bar_html(0, "Connection lost")
             return
 
         done, total = job["chunks_done"], job["chunks_total"]
@@ -207,24 +226,29 @@ def test_voice_generate(text, voice_id, language_label, exaggeration, cfg_weight
 
         if job["status"] == "failed":
             progress(1.0, desc="Failed")
-            yield None, f"Error: {job['error']}"
+            yield None, f"Error: {job['error']}", _progress_bar_html(100, "Failed")
             return
         if job["status"] == "done":
             break
 
         progress(frac, desc=f"Generating test... {done}/{total} chunks")
-        yield None, f"Generating... {done}/{total} chunks ({int(frac * 100)}%)"
+        yield (
+            None,
+            f"Generating... {done}/{total} chunks ({int(frac * 100)}%)",
+            _progress_bar_html(frac * 100, f"Chunk {done}/{total}"),
+        )
 
     try:
         _download_job(job_id, "test_voice_preview.wav")
     except requests.RequestException as e:
-        yield None, f"Generated but download failed: {e}"
+        yield None, f"Generated but download failed: {e}", _progress_bar_html(100, "Download failed")
         return
 
     progress(1.0, desc="Done")
     yield (
         "test_voice_preview.wav",
         "Done. Like it? Use 'Save as default' below, or 'Copy from Test Voice' in Generate Speech.",
+        _progress_bar_html(100, "Done"),
     )
 
 
@@ -317,10 +341,31 @@ def load_item_for_editing(index, queue):
     )
 
 
+def _batch_progress(queue: list[dict]) -> tuple[float, str]:
+    """Combines overall batch progress (items finished) with the currently-running
+    item's own chunk progress, so the bar moves smoothly instead of jumping in
+    big steps only when a whole item finishes."""
+    total = len(queue)
+    finished = sum(1 for i in queue if i["status"] == "done" or str(i["status"]).startswith("failed"))
+    running = next((i for i in queue if i["status"] == "running"), None)
+
+    current_frac = 0.0
+    label = f"{finished}/{total} voices finished"
+    if running and running.get("chunks_total"):
+        current_frac = running["chunks_done"] / running["chunks_total"]
+        label = f"Item {finished + 1}/{total} -- chunk {running['chunks_done']}/{running['chunks_total']}"
+
+    overall_pct = ((finished + current_frac) / total * 100) if total else 0.0
+    return overall_pct, label
+
+
 def generate_all(queue, progress=gr.Progress()):
     queue = list(queue or [])
     if not queue:
-        yield queue, _queue_table(queue), "Queue is empty -- add at least one item first.", []
+        yield (
+            queue, _queue_table(queue), "Queue is empty -- add at least one item first.", [],
+            _progress_bar_html(0, "Idle"),
+        )
         return
 
     for item in queue:
@@ -333,7 +378,10 @@ def generate_all(queue, progress=gr.Progress()):
         except (requests.RequestException, RuntimeError) as e:
             item["status"] = f"failed to submit: {e}"
 
-    yield queue, _queue_table(queue), "Submitted. Voices generate one at a time on the backend...", []
+    yield (
+        queue, _queue_table(queue), "Submitted. Voices generate one at a time on the backend...", [],
+        _progress_bar_html(0, "Submitted"),
+    )
 
     completed_files: list[str] = []
     while any(item["status"] in ACTIVE_JOB_STATUSES for item in queue):
@@ -373,11 +421,18 @@ def generate_all(queue, progress=gr.Progress()):
                 item["status"] = job["status"]
 
         finished = sum(1 for i in queue if i["status"] == "done" or str(i["status"]).startswith("failed"))
-        progress(finished / len(queue), desc=f"{finished}/{len(queue)} voices finished")
-        yield queue, _queue_table(queue), f"{finished}/{len(queue)} finished...", completed_files
+        overall_pct, label = _batch_progress(queue)
+        progress(overall_pct / 100, desc=label)
+        yield (
+            queue, _queue_table(queue), f"{finished}/{len(queue)} finished...", completed_files,
+            _progress_bar_html(overall_pct, label),
+        )
 
     progress(1.0, desc="All done")
-    yield queue, _queue_table(queue), "All queued jobs finished.", completed_files
+    yield (
+        queue, _queue_table(queue), "All queued jobs finished.", completed_files,
+        _progress_bar_html(100, "All done"),
+    )
 
 
 def _load_logo_html() -> str:
@@ -418,6 +473,7 @@ with gr.Blocks(title="Zahra Studio") as demo:
         test_cfg = gr.Slider(0, 1, value=0.5, label="Pace / stability (cfg weight)")
         test_text = gr.Textbox(label="Test sentence", value=TEST_SENTENCE, lines=3)
         test_btn = gr.Button("Generate test")
+        test_progress_html = gr.HTML(_progress_bar_html(0, "Idle"))
         test_audio_out = gr.Audio(label="Preview", type="filepath")
         test_status = gr.Textbox(label="Status", interactive=False)
         save_defaults_btn = gr.Button("Save these as default settings for this voice")
@@ -471,6 +527,7 @@ with gr.Blocks(title="Zahra Studio") as demo:
             load_edit_btn = gr.Button("Load for editing")
 
         generate_all_btn = gr.Button("Generate All", variant="primary")
+        queue_progress_html = gr.HTML(_progress_bar_html(0, "Idle"))
         results_files = gr.Files(label="Completed files (audio + captions)")
 
     # -- Clone / delete voice wiring --
@@ -496,7 +553,7 @@ with gr.Blocks(title="Zahra Studio") as demo:
     test_btn.click(
         test_voice_generate,
         inputs=[test_text, test_voice_dropdown, test_lang_dropdown, test_exaggeration, test_cfg],
-        outputs=[test_audio_out, test_status],
+        outputs=[test_audio_out, test_status, test_progress_html],
     )
     save_defaults_btn.click(
         save_voice_defaults,
@@ -542,7 +599,7 @@ with gr.Blocks(title="Zahra Studio") as demo:
     generate_all_btn.click(
         generate_all,
         inputs=[queue_state],
-        outputs=[queue_state, queue_table, queue_status, results_files],
+        outputs=[queue_state, queue_table, queue_status, results_files, queue_progress_html],
     )
 
 if __name__ == "__main__":

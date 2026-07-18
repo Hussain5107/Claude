@@ -7,6 +7,8 @@ that happen to live alongside the UI wiring.
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "frontend"))
 
 import gradio_app  # noqa: E402
@@ -175,3 +177,47 @@ def test_apply_voice_defaults_uses_saved_values(monkeypatch):
     monkeypatch.setattr(gradio_app, "fetch_voice_defaults", lambda vid: (0.8, 0.2, "German"))
     result = gradio_app.apply_voice_defaults(1, 0.5, 0.5, "English")
     assert result == (0.8, 0.2, "German")
+
+
+def test_progress_bar_html_shows_rounded_percent_and_label():
+    html = gradio_app._progress_bar_html(42.5, "chunk 5/12")
+    assert "42%" in html
+    assert "chunk 5/12" in html
+    assert "width:42.5%" in html
+
+
+def test_progress_bar_html_clamps_out_of_range_values():
+    assert "width:0.0%" in gradio_app._progress_bar_html(-10, "x")
+    assert "width:100.0%" in gradio_app._progress_bar_html(150, "x")
+
+
+def _fake_batch_item(status, chunks_done=0, chunks_total=0):
+    return {
+        "n": 1, "voice_id": 1, "voice_label": "Alice",
+        "status": status, "chunks_done": chunks_done, "chunks_total": chunks_total,
+    }
+
+
+def test_batch_progress_all_queued_is_zero():
+    queue = [_fake_batch_item("queued"), _fake_batch_item("queued")]
+    pct, label = gradio_app._batch_progress(queue)
+    assert pct == 0.0
+    assert "0/2" in label
+
+
+def test_batch_progress_combines_finished_items_and_current_chunk_progress():
+    queue = [
+        _fake_batch_item("done", 4, 4),
+        _fake_batch_item("running", 2, 8),
+        _fake_batch_item("queued"),
+    ]
+    pct, label = gradio_app._batch_progress(queue)
+    assert pct == pytest.approx(41.666, abs=0.01)
+    assert "Item 2/3" in label
+    assert "chunk 2/8" in label
+
+
+def test_batch_progress_all_done_is_100():
+    queue = [_fake_batch_item("done", 4, 4), _fake_batch_item("done", 2, 2)]
+    pct, label = gradio_app._batch_progress(queue)
+    assert pct == 100.0
