@@ -12,7 +12,7 @@ def test_list_voices_returns_catalog():
     resp = client.get("/voices")
     assert resp.status_code == 200
     codes = [v["code"] for v in resp.json()]
-    assert "en_US-lessac-medium" in codes
+    assert "en_US-amy-medium" in codes
 
 
 def test_list_languages():
@@ -40,7 +40,7 @@ def test_generate_speech_job_lifecycle(monkeypatch, tmp_path):
 
     resp = client.post(
         "/generate-speech",
-        data={"text": "hello world", "voice_code": "en_US-lessac-medium", "length_scale": 1.0},
+        data={"text": "hello world", "voice_code": "en_US-amy-medium", "length_scale": 1.0},
     )
     assert resp.status_code == 202
     job_id = resp.json()["job_id"]

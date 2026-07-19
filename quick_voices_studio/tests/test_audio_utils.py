@@ -27,7 +27,7 @@ def test_chunk_text_empty_input():
 
 def test_generate_long_form_rejects_empty_text(tmp_path):
     with pytest.raises(InvalidTextError):
-        audio_utils.generate_long_form("", "en_US-lessac-medium", tmp_path / "out.wav")
+        audio_utils.generate_long_form("", "en_US-amy-medium", tmp_path / "out.wav")
 
 
 def test_generate_long_form_rejects_oversized_text(tmp_path, monkeypatch):
@@ -36,7 +36,7 @@ def test_generate_long_form_rejects_oversized_text(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "max_text_chars", 10)
     with pytest.raises(InvalidTextError):
         audio_utils.generate_long_form(
-            "this text is definitely longer than ten chars", "en_US-lessac-medium", tmp_path / "out.wav"
+            "this text is definitely longer than ten chars", "en_US-amy-medium", tmp_path / "out.wav"
         )
 
 
@@ -58,7 +58,7 @@ def test_generate_long_form_writes_wav_and_reports_progress(tmp_path, monkeypatc
     out_path = tmp_path / "out.wav"
     duration = audio_utils.generate_long_form(
         "First sentence. Second sentence.\n\nThird paragraph sentence.",
-        "en_US-lessac-medium",
+        "en_US-amy-medium",
         out_path,
         on_progress=lambda done, total: progress_calls.append((done, total)),
     )
@@ -89,7 +89,7 @@ def test_generate_long_form_produces_correct_sample_count(tmp_path, monkeypatch)
     monkeypatch.setattr(tts_engine, "synthesize_chunk", fake_fn)
 
     out_path = tmp_path / "out.wav"
-    audio_utils.generate_long_form("One. Two. Three.", "en_US-lessac-medium", out_path)
+    audio_utils.generate_long_form("One. Two. Three.", "en_US-amy-medium", out_path)
 
     with wave.open(str(out_path), "rb") as wf:
         assert wf.getframerate() == SAMPLE_RATE

@@ -53,3 +53,38 @@ def test_fetch_voice_choices_formats_label(monkeypatch):
     monkeypatch.setattr(frontend_app.requests, "get", lambda *a, **k: FakeResp())
     choices = frontend_app.fetch_voice_choices()
     assert choices == [("Amy -- English (US)", "en_US-amy-medium")]
+
+
+def _fake_voices_response(monkeypatch):
+    voices = [
+        {"label": "Amy", "language_label": "English (US)", "code": "en_US-amy-medium"},
+        {"label": "Siwis", "language_label": "French", "code": "fr_FR-siwis-medium"},
+    ]
+
+    class FakeResp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return voices
+
+    monkeypatch.setattr(frontend_app.requests, "get", lambda *a, **k: FakeResp())
+
+
+def test_fetch_voice_choices_filters_by_language(monkeypatch):
+    _fake_voices_response(monkeypatch)
+    choices = frontend_app.fetch_voice_choices("French")
+    assert choices == [("Siwis -- French", "fr_FR-siwis-medium")]
+
+
+def test_fetch_voice_choices_empty_language_returns_all(monkeypatch):
+    _fake_voices_response(monkeypatch)
+    assert len(frontend_app.fetch_voice_choices("")) == 2
+
+
+def test_fetch_language_choices_includes_all_languages_option(monkeypatch):
+    _fake_voices_response(monkeypatch)
+    choices = frontend_app.fetch_language_choices()
+    assert choices[0] == ("All languages", "")
+    assert ("English (US)", "English (US)") in choices
+    assert ("French", "French") in choices

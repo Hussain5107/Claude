@@ -24,7 +24,8 @@ it can be with Chatterbox on a 16GB machine.
    dependencies, then starts the backend on `http://localhost:8100`.
 3. In a separate window, double-click `start_frontend.bat`. It opens the
    Gradio UI, usually at `http://127.0.0.1:7861`.
-4. Pick a voice, paste your script, hit Generate.
+4. Pick a language to filter the list (optional), pick a voice, paste your
+   script, hit Generate.
 
 The first time you use a given voice, the backend downloads its model files
 (one time, from Hugging Face, typically 20-80MB) into `voices/`. After that,
@@ -33,10 +34,23 @@ it's fully offline, just like Zahra Studio.
 Both apps can run at the same time -- they use different ports (Zahra Studio:
 8000/7860, Quick Voices: 8100/7861) specifically so they don't collide.
 
-## Adding more voices
+## Languages and voices
 
-`backend/voice_catalog.py` has a starter list of voices across a few
-languages. Piper's full voice catalog is much bigger. To see everything
+`backend/voice_catalog.py` ships **61 voices across 32 languages**, every
+one checked against Piper's real, current voice list (not guessed) --
+including Arabic, Bengali, Chinese (Mandarin), Czech, Danish, Dutch, Farsi,
+Finnish, French, Georgian, German, Greek, Hindi, Hungarian, Icelandic,
+Indonesian, Italian, Nepali, Norwegian, Polish, Portuguese (Brazil and
+Portugal), Romanian, Russian, Slovak, Slovenian, Spanish (Spain, Mexico and
+Argentina), Swahili, Swedish, Telugu, Turkish, **Urdu**, Vietnamese, and
+Welsh, alongside several English (US/UK) voices.
+
+**Urdu is supported here** (`ur_PK-fasih-medium`, `ur_PK-aegis_female-medium`)
+even though the main Zahra Studio app's Chatterbox engine can't clone it --
+Piper has real Urdu voices, Chatterbox doesn't. Pashto still isn't available
+in either app; Piper has no Pashto voice at all.
+
+Piper's full catalog is bigger than this curated list. To see everything
 available:
 
 ```

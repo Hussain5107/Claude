@@ -2,7 +2,7 @@ from backend.voice_catalog import CATALOG, get_voice, list_languages
 
 
 def test_get_voice_finds_known_code():
-    voice = get_voice("en_US-lessac-medium")
+    voice = get_voice("en_US-amy-medium")
     assert voice is not None
     assert voice.language == "en"
 

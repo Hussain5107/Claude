@@ -8,11 +8,11 @@ from backend.exceptions import UnknownVoiceError, VoiceDownloadError
 
 
 def test_is_voice_downloaded_false_when_missing(isolated_settings):
-    assert tts_engine.is_voice_downloaded("en_US-lessac-medium") is False
+    assert tts_engine.is_voice_downloaded("en_US-amy-medium") is False
 
 
 def test_is_voice_downloaded_true_when_both_files_present(isolated_settings):
-    code = "en_US-lessac-medium"
+    code = "en_US-amy-medium"
     (isolated_settings.voices_dir / f"{code}.onnx").write_bytes(b"fake")
     (isolated_settings.voices_dir / f"{code}.onnx.json").write_text("{}")
     assert tts_engine.is_voice_downloaded(code) is True
@@ -29,11 +29,11 @@ def test_ensure_voice_downloaded_wraps_download_failures(isolated_settings, monk
 
     monkeypatch.setattr(tts_engine, "_piper_download_voice", boom)
     with pytest.raises(VoiceDownloadError):
-        tts_engine.ensure_voice_downloaded("en_US-lessac-medium")
+        tts_engine.ensure_voice_downloaded("en_US-amy-medium")
 
 
 def test_ensure_voice_downloaded_skips_download_if_already_present(isolated_settings, monkeypatch):
-    code = "en_US-lessac-medium"
+    code = "en_US-amy-medium"
     (isolated_settings.voices_dir / f"{code}.onnx").write_bytes(b"fake")
     (isolated_settings.voices_dir / f"{code}.onnx.json").write_text("{}")
 
@@ -44,7 +44,7 @@ def test_ensure_voice_downloaded_skips_download_if_already_present(isolated_sett
 
 
 def test_get_model_caches_loaded_voice(isolated_settings, monkeypatch):
-    code = "en_US-lessac-medium"
+    code = "en_US-amy-medium"
     monkeypatch.setattr(tts_engine, "ensure_voice_downloaded", lambda c: None)
 
     fake_voice = MagicMock()
@@ -73,6 +73,6 @@ def test_synthesize_chunk_concatenates_audio_chunks(isolated_settings, monkeypat
 
     monkeypatch.setattr(tts_engine, "get_model", lambda code: fake_voice)
 
-    samples, sr = tts_engine.synthesize_chunk("hello", "en_US-lessac-medium", 1.0)
+    samples, sr = tts_engine.synthesize_chunk("hello", "en_US-amy-medium", 1.0)
     assert list(samples) == [1, 2, 3, 4, 5]
     assert sr == 22050

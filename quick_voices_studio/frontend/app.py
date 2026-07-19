@@ -31,13 +31,27 @@ def _progress_bar_html(percent: float, label: str = "") -> str:
     """
 
 
-def fetch_voice_choices() -> list[tuple[str, str]]:
+def fetch_all_voices() -> list[dict]:
     try:
         resp = requests.get(f"{API_BASE}/voices", timeout=10)
         resp.raise_for_status()
-        voices = resp.json()
+        return resp.json()
     except requests.RequestException:
         return []
+
+
+def fetch_language_choices() -> list[tuple[str, str]]:
+    voices = fetch_all_voices()
+    seen: dict[str, str] = {}
+    for v in voices:
+        seen.setdefault(v["language_label"], v["language_label"])
+    return [("All languages", "")] + [(label, label) for label in sorted(seen)]
+
+
+def fetch_voice_choices(language_label: str = "") -> list[tuple[str, str]]:
+    voices = fetch_all_voices()
+    if language_label:
+        voices = [v for v in voices if v["language_label"] == language_label]
     return [(f"{v['label']} -- {v['language_label']}", v["code"]) for v in voices]
 
 
@@ -120,6 +134,7 @@ with gr.Blocks(title="Quick Voices Studio") as demo:
         "once (a small file, tens of MB); after that it's fully offline."
     )
 
+    language_dropdown = gr.Dropdown(label="Language", choices=fetch_language_choices(), value="")
     voice_dropdown = gr.Dropdown(label="Voice", choices=fetch_voice_choices())
     refresh_btn = gr.Button("Refresh voice list", size="sm")
     text_box = gr.Textbox(label="Script", lines=10, placeholder="Paste your script here...")
@@ -133,7 +148,15 @@ with gr.Blocks(title="Quick Voices Studio") as demo:
     audio_out = gr.Audio(label="Result", type="filepath")
 
     text_box.change(estimate_duration, inputs=text_box, outputs=duration_label)
-    refresh_btn.click(lambda: gr.update(choices=fetch_voice_choices()), outputs=voice_dropdown)
+    language_dropdown.change(
+        lambda lang: gr.update(choices=fetch_voice_choices(lang), value=None),
+        inputs=language_dropdown,
+        outputs=voice_dropdown,
+    )
+    def _refresh_all(lang):
+        return gr.update(choices=fetch_language_choices()), gr.update(choices=fetch_voice_choices(lang))
+
+    refresh_btn.click(_refresh_all, inputs=language_dropdown, outputs=[language_dropdown, voice_dropdown])
     generate_btn.click(
         generate,
         inputs=[text_box, voice_dropdown, speed_slider],
