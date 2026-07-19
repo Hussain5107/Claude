@@ -1,0 +1,32 @@
+name: quick_voices_studio CI
+
+on:
+  push:
+    paths:
+      - "quick_voices_studio/**"
+      - ".github/workflows/quick_voices_studio-ci.yml"
+  pull_request:
+    paths:
+      - "quick_voices_studio/**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: quick_voices_studio
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dev dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Run tests
+        run: pytest -v

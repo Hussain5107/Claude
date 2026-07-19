@@ -1,0 +1,10 @@
+voices/
+output/
+venv/
+__pycache__/
+*.pyc
+quick_voice_output.wav
+.env
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
