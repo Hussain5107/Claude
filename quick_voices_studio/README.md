@@ -63,6 +63,32 @@ Hugging Face. Pick any code you like the sound of, add a `VoiceInfo` entry
 for it in `voice_catalog.py`, and it'll show up in the dropdown -- it
 downloads automatically the first time it's used.
 
+## Studio controls (advanced, in the "Studio controls" accordion)
+
+Piper voices sound noticeably more robotic than Zahra Studio's cloned
+voices -- that's an architectural ceiling, not a bug (see "Why it's faster"
+above: Piper is small and simple *because* it skips everything that makes
+Chatterbox slow and heavy). These controls help polish the result but won't
+close that gap:
+
+- **Expressiveness** / **Pacing variation** -- Piper's own `noise_scale` /
+  `noise_w_scale` controls, applied at synthesis time. Free (no extra
+  processing time).
+- **Pitch** -- a fast resample-based shift. Changes voice character along
+  with pitch (a "helium/deep voice" effect, not a formant-preserving shift)
+  -- that trade-off is deliberate: a natural-sounding pitch shift (phase
+  vocoder, e.g. librosa) took ~19 seconds to process 30 seconds of audio in
+  testing, which would have undone Quick Voices Studio's entire speed
+  advantage. This one is near-instant.
+- **Warmth** -- a low/high shelf EQ (bass boost + treble cut, or the
+  reverse for "brighter").
+- **Reverb** -- a Schroeder-style comb/allpass reverb for room presence.
+
+If you want real tonal control (genuine emotional expressiveness, not just
+these knobs), that's what Zahra Studio's exaggeration/cfg_weight already
+does with your cloned voice -- use that for anything where quality matters
+more than speed.
+
 ## What this app does NOT do
 
 - No voice cloning -- voices are fixed, pre-trained speakers, not you
@@ -80,6 +106,7 @@ quick_voices_studio/
     voice_catalog.py   The list of available fixed voices
     tts_engine.py      Loads/caches Piper voices, runs synthesis
     audio_utils.py      Text chunking, long-form generation, WAV writing
+    post_processing.py  Pitch/warmth/reverb DSP (numpy + scipy only)
     jobs.py            Background job tracking (progress polling)
     main.py            FastAPI app
   frontend/

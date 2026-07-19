@@ -30,7 +30,18 @@ def test_generate_speech_rejects_unknown_voice():
 
 
 def test_generate_speech_job_lifecycle(monkeypatch, tmp_path):
-    def fake_generate_long_form(text, voice_code, out_path, length_scale=1.0, on_progress=None):
+    def fake_generate_long_form(
+        text,
+        voice_code,
+        out_path,
+        length_scale=1.0,
+        noise_scale=None,
+        noise_w_scale=None,
+        pitch_semitones=0.0,
+        warmth_db=0.0,
+        reverb_amount=0.0,
+        on_progress=None,
+    ):
         out_path.write_bytes(b"RIFF-fake-wav-bytes")
         if on_progress:
             on_progress(1, 1)

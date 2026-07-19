@@ -62,10 +62,24 @@ def get_model(code: str) -> PiperVoice:
         return voice
 
 
-def synthesize_chunk(text: str, code: str, length_scale: float) -> tuple[np.ndarray, int]:
-    """Synthesize one chunk of text. Returns (int16 PCM samples, sample_rate)."""
+def synthesize_chunk(
+    text: str,
+    code: str,
+    length_scale: float,
+    noise_scale: float | None = None,
+    noise_w_scale: float | None = None,
+) -> tuple[np.ndarray, int]:
+    """Synthesize one chunk of text. Returns (int16 PCM samples, sample_rate).
+
+    noise_scale/noise_w_scale are Piper's own expressiveness controls -- how
+    much natural variation the model adds to pitch/timing -- applied for
+    free at synthesis time, unlike pitch/warmth/reverb which are a separate
+    post-processing pass over the finished audio (see post_processing.py).
+    """
     voice = get_model(code)
-    syn_config = SynthesisConfig(length_scale=length_scale)
+    syn_config = SynthesisConfig(
+        length_scale=length_scale, noise_scale=noise_scale, noise_w_scale=noise_w_scale
+    )
 
     pieces = [chunk.audio_int16_array for chunk in voice.synthesize(text, syn_config=syn_config)]
     if not pieces:

@@ -51,6 +51,11 @@ def generate_speech(
     text: str = Form(...),
     voice_code: str = Form(...),
     length_scale: float = Form(1.0),
+    noise_scale: float | None = Form(None),
+    noise_w_scale: float | None = Form(None),
+    pitch_semitones: float = Form(0.0),
+    warmth_db: float = Form(0.0),
+    reverb_amount: float = Form(0.0),
 ):
     if get_voice(voice_code) is None:
         return JSONResponse(status_code=404, content={"detail": f"Unknown voice '{voice_code}'"})
@@ -63,7 +68,16 @@ def generate_speech(
             job.chunks_total = total
 
         audio_utils.generate_long_form(
-            text, voice_code, out_path, length_scale=length_scale, on_progress=on_progress
+            text,
+            voice_code,
+            out_path,
+            length_scale=length_scale,
+            noise_scale=noise_scale,
+            noise_w_scale=noise_w_scale,
+            pitch_semitones=pitch_semitones,
+            warmth_db=warmth_db,
+            reverb_amount=reverb_amount,
+            on_progress=on_progress,
         )
         return out_path
 

@@ -61,7 +61,17 @@ def estimate_duration(text: str) -> str:
     return f"{words} words -- approx {minutes:.1f} min narrated (estimate, actual pace varies)"
 
 
-def generate(text, voice_code, length_scale, progress=gr.Progress()):
+def generate(
+    text,
+    voice_code,
+    length_scale,
+    noise_scale,
+    noise_w_scale,
+    pitch_semitones,
+    warmth_db,
+    reverb_amount,
+    progress=gr.Progress(),
+):
     if not text.strip():
         yield None, "Enter some script text first.", _progress_bar_html(0, "Idle")
         return
@@ -75,7 +85,16 @@ def generate(text, voice_code, length_scale, progress=gr.Progress()):
     try:
         resp = requests.post(
             f"{API_BASE}/generate-speech",
-            data={"text": text, "voice_code": voice_code, "length_scale": length_scale},
+            data={
+                "text": text,
+                "voice_code": voice_code,
+                "length_scale": length_scale,
+                "noise_scale": noise_scale,
+                "noise_w_scale": noise_w_scale,
+                "pitch_semitones": pitch_semitones,
+                "warmth_db": warmth_db,
+                "reverb_amount": reverb_amount,
+            },
             timeout=30,
         )
         if resp.status_code != 202:
@@ -142,6 +161,30 @@ with gr.Blocks(title="Quick Voices Studio") as demo:
     speed_slider = gr.Slider(
         label="Speed (lower = faster, higher = slower)", minimum=0.5, maximum=2.0, value=1.0, step=0.05
     )
+    with gr.Accordion("Studio controls (advanced)", open=False):
+        gr.Markdown(
+            "These help, but Piper has a lower natural-sounding ceiling than Zahra Studio's "
+            "cloned voices -- use these for polish, not a full fix."
+        )
+        noise_scale_slider = gr.Slider(
+            label="Expressiveness (Piper's own control, free -- no extra processing time)",
+            minimum=0.0, maximum=1.5, value=0.667, step=0.01,
+        )
+        noise_w_scale_slider = gr.Slider(
+            label="Pacing variation (Piper's own control, free -- no extra processing time)",
+            minimum=0.0, maximum=1.5, value=0.8, step=0.01,
+        )
+        pitch_slider = gr.Slider(
+            label="Pitch (semitones) -- quick resample-based shift, changes voice character too",
+            minimum=-6.0, maximum=6.0, value=0.0, step=0.5,
+        )
+        warmth_slider = gr.Slider(
+            label="Warmth (negative = brighter/thinner, positive = warmer/bassier)",
+            minimum=-6.0, maximum=6.0, value=0.0, step=0.5,
+        )
+        reverb_slider = gr.Slider(
+            label="Reverb (room presence)", minimum=0.0, maximum=1.0, value=0.0, step=0.05
+        )
     generate_btn = gr.Button("Generate", variant="primary")
     progress_html = gr.HTML(_progress_bar_html(0, "Idle"))
     status_box = gr.Markdown("")
@@ -159,7 +202,16 @@ with gr.Blocks(title="Quick Voices Studio") as demo:
     refresh_btn.click(_refresh_all, inputs=language_dropdown, outputs=[language_dropdown, voice_dropdown])
     generate_btn.click(
         generate,
-        inputs=[text_box, voice_dropdown, speed_slider],
+        inputs=[
+            text_box,
+            voice_dropdown,
+            speed_slider,
+            noise_scale_slider,
+            noise_w_scale_slider,
+            pitch_slider,
+            warmth_slider,
+            reverb_slider,
+        ],
         outputs=[audio_out, status_box, progress_html],
     )
 

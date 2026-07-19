@@ -41,8 +41,8 @@ def test_generate_long_form_rejects_oversized_text(tmp_path, monkeypatch):
 
 
 def _fake_synthesize_chunk_factory(calls, seconds_per_chunk=0.2):
-    def fake_synthesize_chunk(text, voice_code, length_scale):
-        calls.append((text, voice_code, length_scale))
+    def fake_synthesize_chunk(text, voice_code, length_scale, noise_scale=None, noise_w_scale=None):
+        calls.append((text, voice_code, length_scale, noise_scale, noise_w_scale))
         n_samples = int(seconds_per_chunk * SAMPLE_RATE)
         samples = np.full(n_samples, 1000, dtype=np.int16)
         return samples, SAMPLE_RATE
@@ -96,3 +96,50 @@ def test_generate_long_form_produces_correct_sample_count(tmp_path, monkeypatch)
         assert wf.getnchannels() == 1
         assert wf.getsampwidth() == 2
         assert wf.getnframes() == len(calls) * int(0.5 * SAMPLE_RATE)
+
+
+def test_generate_long_form_passes_noise_params(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(tts_engine, "synthesize_chunk", _fake_synthesize_chunk_factory(calls))
+
+    audio_utils.generate_long_form(
+        "Hello there.", "en_US-amy-medium", tmp_path / "out.wav", noise_scale=0.9, noise_w_scale=1.1
+    )
+
+    assert calls[0][3] == 0.9
+    assert calls[0][4] == 1.1
+
+
+def test_generate_long_form_with_pitch_uses_buffered_path_and_compensates_length_scale(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(tts_engine, "synthesize_chunk", _fake_synthesize_chunk_factory(calls))
+
+    audio_utils.generate_long_form(
+        "Hello there.", "en_US-amy-medium", tmp_path / "out.wav", length_scale=1.0, pitch_semitones=12.0
+    )
+
+    # +12 semitones -> ratio 2.0 -> Piper asked to synthesize 2x longer before the shift
+    assert calls[0][2] == pytest.approx(2.0)
+
+
+def test_generate_long_form_with_warmth_or_reverb_still_writes_output(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(tts_engine, "synthesize_chunk", _fake_synthesize_chunk_factory(calls))
+
+    out_path = tmp_path / "out.wav"
+    duration = audio_utils.generate_long_form(
+        "Hello there.", "en_US-amy-medium", out_path, warmth_db=3.0, reverb_amount=0.4
+    )
+
+    assert out_path.exists()
+    assert duration > 0
+
+
+def test_generate_long_form_no_postprocess_options_skips_buffering(tmp_path, monkeypatch):
+    """With nothing to post-process, length_scale should be passed through unmodified."""
+    calls = []
+    monkeypatch.setattr(tts_engine, "synthesize_chunk", _fake_synthesize_chunk_factory(calls))
+
+    audio_utils.generate_long_form("Hello.", "en_US-amy-medium", tmp_path / "out.wav", length_scale=1.4)
+
+    assert calls[0][2] == 1.4
