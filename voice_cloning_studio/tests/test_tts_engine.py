@@ -31,12 +31,34 @@ def test_last_model_load_seconds_defaults_to_zero():
     assert tts_engine.get_last_model_load_seconds() >= 0.0
 
 
-def test_repetition_cutoff_detector_triggers_on_eos_message():
+def test_repetition_cutoff_detector_triggers_on_token_repetition():
+    # exact message shape observed in a real backend log
     with tts_engine._watch_for_repetition_cutoff() as detector:
         logging.getLogger(tts_engine._ALIGNMENT_LOGGER_NAME).warning(
-            "some prefix forcing EOS token some suffix"
+            "forcing EOS token, long_tail=tensor(False), "
+            "alignment_repetition=tensor(False), token_repetition=True"
         )
     assert detector.triggered is True
+
+
+def test_repetition_cutoff_detector_triggers_on_alignment_repetition():
+    with tts_engine._watch_for_repetition_cutoff() as detector:
+        logging.getLogger(tts_engine._ALIGNMENT_LOGGER_NAME).warning(
+            "forcing EOS token, long_tail=tensor(False), "
+            "alignment_repetition=tensor(True), token_repetition=False"
+        )
+    assert detector.triggered is True
+
+
+def test_repetition_cutoff_detector_ignores_benign_long_tail_stop():
+    # long_tail-only forced EOS means speech completed and the model was
+    # producing trailing silence -- the audio is fine, no retry warranted
+    with tts_engine._watch_for_repetition_cutoff() as detector:
+        logging.getLogger(tts_engine._ALIGNMENT_LOGGER_NAME).warning(
+            "forcing EOS token, long_tail=tensor(True), "
+            "alignment_repetition=tensor(False), token_repetition=False"
+        )
+    assert detector.triggered is False
 
 
 def test_repetition_cutoff_detector_ignores_unrelated_messages():

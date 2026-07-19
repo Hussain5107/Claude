@@ -35,14 +35,32 @@ _ALIGNMENT_LOGGER_NAME = "chatterbox.models.t3.inference.alignment_stream_analyz
 
 
 class _RepetitionCutoffDetector(logging.Handler):
-    """Watches for Chatterbox's own repetition-safety log line during one generate() call."""
+    """Watches Chatterbox's forced-EOS log line during one generate() call.
+
+    Chatterbox forces EOS for two very different reasons, distinguishable by
+    the flags it logs: repetition (the model looped -- audio is broken, worth
+    regenerating) and long_tail (speech completed and the model was just
+    producing trailing silence -- the audio is fine). Only repetition counts
+    as truncation here; treating long_tail as truncation caused near-every
+    chunk to be regenerated 2-3x for no quality gain on real jobs.
+    """
+
+    _REPETITION_MARKERS = (
+        "alignment_repetition=tensor(True)",
+        "alignment_repetition=True",
+        "token_repetition=tensor(True)",
+        "token_repetition=True",
+    )
 
     def __init__(self):
         super().__init__()
         self.triggered = False
 
     def emit(self, record: logging.LogRecord) -> None:
-        if "forcing EOS token" in record.getMessage():
+        msg = record.getMessage()
+        if "forcing EOS token" not in msg:
+            return
+        if any(marker in msg for marker in self._REPETITION_MARKERS):
             self.triggered = True
 
 
