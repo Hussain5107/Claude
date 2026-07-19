@@ -44,6 +44,12 @@ def fetch_voice_choices():
         return []
 
 
+def _voice_choice_updates(n: int) -> tuple:
+    """One backend fetch fanned out to n dropdowns (instead of n fetches)."""
+    choices = fetch_voice_choices()
+    return tuple(gr.update(choices=choices) for _ in range(n))
+
+
 def _voice_label_for_id(voice_id) -> str:
     for label, vid in fetch_voice_choices():
         if vid == voice_id:
@@ -532,15 +538,15 @@ with gr.Blocks(title="Zahra Studio") as demo:
 
     # -- Clone / delete voice wiring --
     clone_btn.click(clone_voice, inputs=[audio_in, name_in], outputs=[clone_status, voice_dropdown]).then(
-        lambda: (gr.update(choices=fetch_voice_choices()), gr.update(choices=fetch_voice_choices())),
+        lambda: _voice_choice_updates(2),
         outputs=[delete_dropdown, test_voice_dropdown],
     )
     delete_btn.click(delete_voice, inputs=[delete_dropdown], outputs=[delete_status, delete_dropdown]).then(
-        lambda: (gr.update(choices=fetch_voice_choices()), gr.update(choices=fetch_voice_choices())),
+        lambda: _voice_choice_updates(2),
         outputs=[voice_dropdown, test_voice_dropdown],
     )
     refresh_btn.click(
-        lambda: (gr.update(choices=fetch_voice_choices()), gr.update(choices=fetch_voice_choices())),
+        lambda: _voice_choice_updates(2),
         outputs=[voice_dropdown, test_voice_dropdown],
     )
 

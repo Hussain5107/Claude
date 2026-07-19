@@ -125,6 +125,7 @@ def _generate_buffered(
             on_progress(i + 1, len(chunks))
 
     audio = np.concatenate(pieces) if pieces else np.zeros(0, dtype=np.int16)
+    pieces.clear()  # drop the per-chunk copies; only the concatenated buffer is needed now
     if pitch_semitones != 0:
         audio = post_processing.pitch_shift(audio, pitch_semitones)
     if warmth_db != 0:

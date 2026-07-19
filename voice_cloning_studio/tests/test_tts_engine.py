@@ -7,6 +7,7 @@ run order and risk breaking future tests that need it for real.
 """
 
 import logging
+from unittest.mock import MagicMock
 
 from backend import tts_engine
 
@@ -50,3 +51,29 @@ def test_repetition_cutoff_detector_removes_handler_after_context():
     with tts_engine._watch_for_repetition_cutoff():
         assert len(target.handlers) == handlers_before + 1
     assert len(target.handlers) == handlers_before
+
+
+def test_load_conditionals_caches_by_path_and_mtime(tmp_path, monkeypatch):
+    emb = tmp_path / "voice.pt"
+    emb.write_bytes(b"fake")
+
+    fake_conds = MagicMock()
+    fake_conds.to.return_value = fake_conds
+    load_calls = []
+    monkeypatch.setattr(tts_engine, "get_model", lambda: MagicMock(device="cpu"))
+    monkeypatch.setattr(
+        tts_engine.Conditionals, "load",
+        staticmethod(lambda p, map_location=None: load_calls.append(p) or fake_conds),
+    )
+    tts_engine._conditionals_cache.clear()
+
+    first = tts_engine.load_conditionals(str(emb))
+    second = tts_engine.load_conditionals(str(emb))
+    assert first is second
+    assert len(load_calls) == 1  # second call served from cache
+
+    # touching the file (re-clone) invalidates the cached entry
+    import os
+    os.utime(emb, (os.path.getmtime(emb) + 10, os.path.getmtime(emb) + 10))
+    tts_engine.load_conditionals(str(emb))
+    assert len(load_calls) == 2

@@ -14,6 +14,7 @@ and reuse it via ``generate_chunk``, rather than reloading per chunk.
 
 import contextlib
 import logging
+import os
 import threading
 
 import torch
@@ -108,24 +109,45 @@ def get_supported_languages() -> dict:
 def extract_and_save_embedding(audio_path: str, embedding_path: str, exaggeration: float = 0.5) -> None:
     model = get_model()
     try:
-        model.prepare_conditionals(audio_path, exaggeration=exaggeration)
+        with torch.inference_mode():
+            model.prepare_conditionals(audio_path, exaggeration=exaggeration)
         model.conds.save(embedding_path)
     except Exception as e:
         logger.exception("Failed to extract voice embedding from %s", audio_path)
         raise VoiceProcessingError(e) from e
 
 
+# Deserializing a saved embedding is a torch.load per call; jobs for the same
+# voice shouldn't repay it every time. Keyed by (path, mtime) so re-cloning a
+# voice under the same name invalidates the cached entry.
+_conditionals_cache: dict[str, tuple[float, Conditionals]] = {}
+_CONDITIONALS_CACHE_MAX = 8
+
+
 def load_conditionals(embedding_path: str) -> Conditionals:
     model = get_model()
     try:
-        return Conditionals.load(embedding_path, map_location=model.device).to(model.device)
+        mtime = os.path.getmtime(embedding_path)
+        cached = _conditionals_cache.get(embedding_path)
+        if cached is not None and cached[0] == mtime:
+            return cached[1]
+
+        conds = Conditionals.load(embedding_path, map_location=model.device).to(model.device)
+        if len(_conditionals_cache) >= _CONDITIONALS_CACHE_MAX:
+            _conditionals_cache.pop(next(iter(_conditionals_cache)))
+        _conditionals_cache[embedding_path] = (mtime, conds)
+        return conds
     except Exception as e:
         logger.exception("Failed to load voice embedding from %s", embedding_path)
         raise VoiceProcessingError(e) from e
 
 
 def _generate_once(model, text, language_id, exaggeration, cfg_weight) -> tuple[torch.Tensor, bool]:
-    with _watch_for_repetition_cutoff() as detector:
+    # inference_mode disables autograd tracking entirely (stronger than
+    # no_grad: also skips version-counter bookkeeping on every tensor op).
+    # Chatterbox doesn't wrap its own generate(), so without this each
+    # sampling step pays graph-tracking overhead it never uses.
+    with _watch_for_repetition_cutoff() as detector, torch.inference_mode():
         wav = model.generate(
             text,
             language_id=language_id,

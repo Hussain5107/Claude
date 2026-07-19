@@ -40,19 +40,23 @@ def fetch_all_voices() -> list[dict]:
         return []
 
 
-def fetch_language_choices() -> list[tuple[str, str]]:
-    voices = fetch_all_voices()
-    seen: dict[str, str] = {}
-    for v in voices:
-        seen.setdefault(v["language_label"], v["language_label"])
-    return [("All languages", "")] + [(label, label) for label in sorted(seen)]
+def _language_choices_from(voices: list[dict]) -> list[tuple[str, str]]:
+    labels = sorted({v["language_label"] for v in voices})
+    return [("All languages", "")] + [(label, label) for label in labels]
 
 
-def fetch_voice_choices(language_label: str = "") -> list[tuple[str, str]]:
-    voices = fetch_all_voices()
+def _voice_choices_from(voices: list[dict], language_label: str = "") -> list[tuple[str, str]]:
     if language_label:
         voices = [v for v in voices if v["language_label"] == language_label]
     return [(f"{v['label']} -- {v['language_label']}", v["code"]) for v in voices]
+
+
+def fetch_language_choices() -> list[tuple[str, str]]:
+    return _language_choices_from(fetch_all_voices())
+
+
+def fetch_voice_choices(language_label: str = "") -> list[tuple[str, str]]:
+    return _voice_choices_from(fetch_all_voices(), language_label)
 
 
 def estimate_duration(text: str) -> str:
@@ -197,7 +201,11 @@ with gr.Blocks(title="Quick Voices Studio") as demo:
         outputs=voice_dropdown,
     )
     def _refresh_all(lang):
-        return gr.update(choices=fetch_language_choices()), gr.update(choices=fetch_voice_choices(lang))
+        voices = fetch_all_voices()  # one backend call feeds both dropdowns
+        return (
+            gr.update(choices=_language_choices_from(voices)),
+            gr.update(choices=_voice_choices_from(voices, lang)),
+        )
 
     refresh_btn.click(_refresh_all, inputs=language_dropdown, outputs=[language_dropdown, voice_dropdown])
     generate_btn.click(
