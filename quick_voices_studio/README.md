@@ -74,15 +74,18 @@ close that gap:
 - **Expressiveness** / **Pacing variation** -- Piper's own `noise_scale` /
   `noise_w_scale` controls, applied at synthesis time. Free (no extra
   processing time).
-- **Pitch** -- a fast resample-based shift. Changes voice character along
-  with pitch (a "helium/deep voice" effect, not a formant-preserving shift)
-  -- that trade-off is deliberate: a natural-sounding pitch shift (phase
-  vocoder, e.g. librosa) took ~19 seconds to process 30 seconds of audio in
-  testing, which would have undone Quick Voices Studio's entire speed
-  advantage. This one is near-instant.
+- **Pitch** -- a genuine formant-preserving shift (via
+  [`pedalboard`](https://github.com/spotify/pedalboard), Spotify's audio DSP
+  library), not a resample trick -- voice character stays intact, only pitch
+  moves. An earlier version used a resample-based shift instead, because a
+  naive phase-vocoder implementation (librosa) took ~19s to process 30s of
+  audio -- too slow to be worth it. `pedalboard` doesn't have that problem
+  (its DSP is C++, not pure Python): ~10s to process a full 10-minute
+  narration with pitch, warmth, and reverb all combined -- trivial next to
+  how long synthesis itself takes.
 - **Warmth** -- a low/high shelf EQ (bass boost + treble cut, or the
   reverse for "brighter").
-- **Reverb** -- a Schroeder-style comb/allpass reverb for room presence.
+- **Reverb** -- room-presence reverb.
 
 If you want real tonal control (genuine emotional expressiveness, not just
 these knobs), that's what Zahra Studio's exaggeration/cfg_weight already
@@ -106,7 +109,7 @@ quick_voices_studio/
     voice_catalog.py   The list of available fixed voices
     tts_engine.py      Loads/caches Piper voices, runs synthesis
     audio_utils.py      Text chunking, long-form generation, WAV writing
-    post_processing.py  Pitch/warmth/reverb DSP (numpy + scipy only)
+    post_processing.py  Pitch/warmth/reverb DSP (via pedalboard)
     jobs.py            Background job tracking (progress polling)
     main.py            FastAPI app
   frontend/

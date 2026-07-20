@@ -179,7 +179,7 @@ with gr.Blocks(title="Quick Voices Studio") as demo:
             minimum=0.0, maximum=1.5, value=0.8, step=0.01,
         )
         pitch_slider = gr.Slider(
-            label="Pitch (semitones) -- quick resample-based shift, changes voice character too",
+            label="Pitch (semitones)",
             minimum=-6.0, maximum=6.0, value=0.0, step=0.5,
         )
         warmth_slider = gr.Slider(

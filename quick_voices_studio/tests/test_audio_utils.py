@@ -110,16 +110,17 @@ def test_generate_long_form_passes_noise_params(tmp_path, monkeypatch):
     assert calls[0][4] == 1.1
 
 
-def test_generate_long_form_with_pitch_uses_buffered_path_and_compensates_length_scale(tmp_path, monkeypatch):
+def test_generate_long_form_with_pitch_uses_buffered_path_and_keeps_length_scale(tmp_path, monkeypatch):
+    """pedalboard's pitch shift preserves duration, so unlike the old resample-based
+    approach, length_scale needs no compensation -- what's passed in is what Piper gets."""
     calls = []
     monkeypatch.setattr(tts_engine, "synthesize_chunk", _fake_synthesize_chunk_factory(calls))
 
     audio_utils.generate_long_form(
-        "Hello there.", "en_US-amy-medium", tmp_path / "out.wav", length_scale=1.0, pitch_semitones=12.0
+        "Hello there.", "en_US-amy-medium", tmp_path / "out.wav", length_scale=1.3, pitch_semitones=12.0
     )
 
-    # +12 semitones -> ratio 2.0 -> Piper asked to synthesize 2x longer before the shift
-    assert calls[0][2] == pytest.approx(2.0)
+    assert calls[0][2] == pytest.approx(1.3)
 
 
 def test_generate_long_form_with_warmth_or_reverb_still_writes_output(tmp_path, monkeypatch):

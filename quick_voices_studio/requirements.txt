@@ -5,5 +5,5 @@ gradio
 requests
 piper-tts
 numpy
-scipy
+pedalboard
 python-dotenv

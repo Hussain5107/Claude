@@ -127,7 +127,7 @@ def _generate_buffered(
     audio = np.concatenate(pieces) if pieces else np.zeros(0, dtype=np.int16)
     pieces.clear()  # drop the per-chunk copies; only the concatenated buffer is needed now
     if pitch_semitones != 0:
-        audio = post_processing.pitch_shift(audio, pitch_semitones)
+        audio = post_processing.pitch_shift(audio, sample_rate, pitch_semitones)
     if warmth_db != 0:
         audio = post_processing.apply_warmth(audio, sample_rate, warmth_db)
     if reverb_amount > 0:
@@ -173,14 +173,12 @@ def generate_long_form(
             chunks, voice_code, length_scale, noise_scale, noise_w_scale, out_path, on_progress
         )
 
-    # Pitch-shifting changes duration (higher pitch -> shorter, lower pitch -> longer) by
-    # `ratio`, so ask Piper to synthesize `ratio` times longer up front -- after the shift,
-    # the final duration lands back near what `length_scale` alone would have produced.
-    ratio = 2.0 ** (pitch_semitones / 12.0) if pitch_semitones != 0 else 1.0
+    # pedalboard's PitchShift preserves duration (unlike a resample-based shift), so
+    # length_scale needs no compensation here -- what you set is what you get.
     return _generate_buffered(
         chunks,
         voice_code,
-        length_scale * ratio,
+        length_scale,
         noise_scale,
         noise_w_scale,
         pitch_semitones,
