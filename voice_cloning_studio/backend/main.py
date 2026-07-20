@@ -8,7 +8,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from . import audio_utils, database, tts_engine
+from . import audio_utils, database, job_store, tts_engine
 from .config import settings
 from .exceptions import (
     InvalidAudioError,
@@ -33,6 +33,7 @@ def _start_job_sweeper() -> None:
         while True:
             time.sleep(300)
             job_manager.sweep_expired()
+            job_store.sweep_expired_jobs()
 
     threading.Thread(target=loop, daemon=True, name="job-sweeper").start()
 
@@ -158,6 +159,56 @@ async def get_languages():
     return tts_engine.get_supported_languages()
 
 
+def _submit_generation_job(
+    job_id: str,
+    embedding_path: str,
+    text: str,
+    language: str,
+    exaggeration: float,
+    cfg_weight: float,
+    chunks: list[audio_utils.TextChunk],
+    initial_chunks_done: int = 0,
+) -> None:
+    """Shared by the initial submit and resume: builds the work closure and
+    hands it to JobManager. `job_id` doubles as the job_store cache key, so
+    a resumed run reusing the same job_id picks up any chunks already on
+    disk from a previous, interrupted attempt instead of regenerating them.
+    """
+    out_path = settings.output_dir / f"{job_id}.wav"
+    captions_path = settings.output_dir / f"{job_id}.srt"
+
+    def work(on_progress):
+        profile = PipelineProfile()
+        cues = audio_utils.generate_long_form(
+            text,
+            embedding_path,
+            out_path,
+            language_id=language,
+            exaggeration=exaggeration,
+            cfg_weight=cfg_weight,
+            on_progress=on_progress,
+            profile=profile,
+            job_id=job_id,
+            precomputed_chunks=chunks,
+        )
+        audio_utils.write_srt(cues, captions_path)
+        if settings.enable_pipeline_profiling:
+            profile.model_load_sec = tts_engine.get_last_model_load_seconds()
+            profile.total_sec = (
+                profile.model_load_sec + profile.embedding_load_sec + profile.inference_sec
+                + profile.postprocess_sec + profile.write_sec
+            )
+            logger.info("Pipeline profile: %s", profile.summary())
+        # Job finished: the per-chunk cache and manifest have served their
+        # purpose (resuming a *completed* job makes no sense), drop them.
+        job_store.cleanup_job_dir(job_id)
+        return out_path, captions_path
+
+    job_manager.submit(
+        work, job_id=job_id, initial_chunks_done=initial_chunks_done, initial_chunks_total=len(chunks)
+    )
+
+
 @app.post("/generate-speech", status_code=202)
 async def generate_speech(
     text: str = Form(...),
@@ -182,34 +233,73 @@ async def generate_speech(
     exaggeration = settings.default_exaggeration if exaggeration is None else exaggeration
     cfg_weight = settings.default_cfg_weight if cfg_weight is None else cfg_weight
 
-    job_uuid = uuid.uuid4().hex
-    out_path = settings.output_dir / f"{job_uuid}.wav"
-    captions_path = settings.output_dir / f"{job_uuid}.srt"
+    chunks = audio_utils.chunk_text_with_languages(text, language)
+    if not chunks:
+        raise InvalidTextError("No text to synthesize")
 
-    def work(on_progress):
-        profile = PipelineProfile()
-        cues = audio_utils.generate_long_form(
-            text,
-            voice["embedding_path"],
-            out_path,
-            language_id=language,
-            exaggeration=exaggeration,
-            cfg_weight=cfg_weight,
-            on_progress=on_progress,
-            profile=profile,
-        )
-        audio_utils.write_srt(cues, captions_path)
-        if settings.enable_pipeline_profiling:
-            profile.model_load_sec = tts_engine.get_last_model_load_seconds()
-            profile.total_sec = (
-                profile.model_load_sec + profile.embedding_load_sec + profile.inference_sec
-                + profile.postprocess_sec + profile.write_sec
-            )
-            logger.info("Pipeline profile: %s", profile.summary())
-        return out_path, captions_path
-
-    job_id = job_manager.submit(work)
+    job_id = uuid.uuid4().hex
+    job_store.write_manifest(
+        job_id,
+        voice_id=voice_id,
+        embedding_path=voice["embedding_path"],
+        language_id=language,
+        exaggeration=exaggeration,
+        cfg_weight=cfg_weight,
+        text=text,
+        chunks=[
+            job_store.ChunkSpec(c.text, c.is_paragraph_end, c.language_id) for c in chunks
+        ],
+    )
+    _submit_generation_job(job_id, voice["embedding_path"], text, language, exaggeration, cfg_weight, chunks)
     logger.info("Queued generation job %s for voice_id=%d (%d chars)", job_id, voice_id, len(text))
+    return {"job_id": job_id}
+
+
+@app.get("/jobs/resumable")
+async def list_resumable_jobs():
+    """Jobs that started generating but never finished -- whether they hit an
+    error or the backend process itself died mid-run (crash, closed window,
+    laptop sleep). Each one has chunks already generated and cached on disk;
+    resuming regenerates only what's left instead of starting over."""
+    resumable = []
+    for manifest in job_store.list_resumable_jobs():
+        voice = database.get_voice(manifest["voice_id"])
+        resumable.append({
+            "job_id": manifest["job_id"],
+            "voice_name": voice["name"] if voice else f"voice #{manifest['voice_id']} (deleted)",
+            "chunks_done": manifest["chunks_done"],
+            "chunks_total": manifest["chunks_total"],
+            "created_at": manifest["created_at"],
+            "text_preview": manifest["text"][:120],
+        })
+    return resumable
+
+
+@app.post("/jobs/{job_id}/resume", status_code=202)
+async def resume_job(job_id: str):
+    manifest = job_store.load_manifest(job_id)
+    if manifest is None:
+        raise JobNotFoundError(f"No resumable job {job_id}")
+
+    chunks = [
+        audio_utils.TextChunk(
+            text=c["text"], is_paragraph_end=c["is_paragraph_end"], language_id=c["language_id"]
+        )
+        for c in manifest["chunks"]
+    ]
+    initial_done = job_store.chunks_done_count(job_id, len(chunks))
+
+    _submit_generation_job(
+        job_id,
+        manifest["embedding_path"],
+        manifest["text"],
+        manifest["language_id"],
+        manifest["exaggeration"],
+        manifest["cfg_weight"],
+        chunks,
+        initial_chunks_done=initial_done,
+    )
+    logger.info("Resuming job %s from chunk %d/%d", job_id, initial_done, len(chunks))
     return {"job_id": job_id}
 
 

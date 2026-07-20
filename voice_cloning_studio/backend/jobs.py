@@ -49,11 +49,23 @@ class JobManager:
         self._lock = threading.Lock()
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="tts-worker")
 
-    def submit(self, work: Callable[[Callable[[int, int], None]], tuple[Path, Path | None]]) -> str:
+    def submit(
+        self,
+        work: Callable[[Callable[[int, int], None]], tuple[Path, Path | None]],
+        job_id: str | None = None,
+        initial_chunks_done: int = 0,
+        initial_chunks_total: int = 0,
+    ) -> str:
         """``work`` receives an on_progress(done, total) callback and returns
-        (audio_path, captions_path_or_None)."""
-        job_id = uuid.uuid4().hex
-        job = Job(id=job_id)
+        (audio_path, captions_path_or_None).
+
+        Pass an existing ``job_id`` (with its already-known progress) when
+        resuming a job whose disk-persisted chunk cache means it won't start
+        from 0 -- the UI shows the real starting point immediately instead of
+        a misleading jump back to 0%.
+        """
+        job_id = job_id or uuid.uuid4().hex
+        job = Job(id=job_id, chunks_done=initial_chunks_done, chunks_total=initial_chunks_total)
         with self._lock:
             self._jobs[job_id] = job
 

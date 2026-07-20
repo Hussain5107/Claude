@@ -27,6 +27,7 @@ backend/
   tts_engine.py          Chatterbox model singleton + embedding load/save
   audio_utils.py         text chunking + long-form generation orchestration
   jobs.py                 background job manager (generation runs off the request thread)
+  job_store.py            disk-persisted job manifests + per-chunk audio cache, for resume
 frontend/
   gradio_app.py          UI: clone/manage voices, test-tune settings, queue+batch generate
   assets/logo.svg         Zahra Studio logo
@@ -132,6 +133,17 @@ machine anyway. The queue is what makes this not feel like a limitation:
 submit everything up front, walk away, come back to a folder of finished
 files instead of babysitting one generation at a time.
 
+**Resume tab:** every generation job saves each finished chunk to disk as it
+completes, not just to memory. If a job is interrupted -- an error, closing
+the terminal window, a laptop sleeping, anything short of deleting the
+`output/jobs/` folder -- **Check for unfinished jobs** will find it, showing
+the voice, how far it got, and when it started. Hit **Resume** and it
+continues from the next chunk that was never generated; chunks already
+finished are reused as-is, never redone. This works even after a full
+backend restart, since the progress lives on disk, not in the running
+process's memory. A job's cache is deleted automatically once it finishes
+successfully -- there's nothing to clean up by hand.
+
 ## Claude Desktop integration
 
 `mcp_server/` is an MCP bridge so you can write a script *and* narrate it in
@@ -162,6 +174,11 @@ Claude session can't reach a server running on your own machine.
 - `GET /jobs/{job_id}/download` — the finished `.wav` (409 if not done yet).
 - `GET /jobs/{job_id}/captions` — the auto-generated `.srt` captions for that
   job (409 if not done yet, 404 if somehow unavailable).
+- `GET /jobs/resumable` — jobs that started but never finished, each with
+  `voice_name`, `chunks_done`/`chunks_total`, `created_at`, `text_preview`.
+- `POST /jobs/{job_id}/resume` — continues an unfinished job, regenerating
+  only the chunks that never completed. Returns `202 {"job_id": "..."}` (the
+  same id); poll `/jobs/{job_id}` exactly as for a fresh submission.
 
 ## Development
 

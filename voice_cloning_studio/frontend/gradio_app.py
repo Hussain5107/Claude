@@ -208,6 +208,103 @@ def _download_captions(job_id: str, out_path: str) -> None:
     Path(out_path).write_bytes(resp.content)
 
 
+# --- Resume tab: recover a job that failed or was cut short (crash, closed
+# window, laptop sleep) without regenerating chunks already finished ---
+
+def fetch_resumable_jobs() -> list[dict]:
+    try:
+        resp = requests.get(f"{API_BASE}/jobs/resumable", timeout=10)
+        resp.raise_for_status()
+        return resp.json()
+    except requests.RequestException:
+        return []
+
+
+def _resumable_table(jobs: list[dict]) -> list[list]:
+    rows = []
+    for j in jobs:
+        pct = f"{int(100 * j['chunks_done'] / j['chunks_total'])}%" if j["chunks_total"] else "-"
+        started = time.strftime("%Y-%m-%d %H:%M", time.localtime(j["created_at"]))
+        progress_str = f"{j['chunks_done']}/{j['chunks_total']} ({pct})"
+        rows.append([j["voice_name"], progress_str, started, j["text_preview"]])
+    return rows
+
+
+def _resumable_choices(jobs: list[dict]) -> list[tuple[str, str]]:
+    choices = []
+    for j in jobs:
+        preview = j["text_preview"][:50]
+        label = f"{j['voice_name']} -- {j['chunks_done']}/{j['chunks_total']} chunks -- \"{preview}\""
+        choices.append((label, j["job_id"]))
+    return choices
+
+
+def refresh_resumable_jobs():
+    jobs = fetch_resumable_jobs()
+    return _resumable_table(jobs), gr.update(choices=_resumable_choices(jobs), value=None)
+
+
+def resume_generation(job_id, progress=gr.Progress()):
+    if not job_id:
+        yield None, None, "Pick a job to resume first.", _progress_bar_html(0, "Idle")
+        return
+
+    progress(0, desc="Resuming...")
+    yield None, None, "Resuming...", _progress_bar_html(0, "Resuming")
+    try:
+        resp = requests.post(f"{API_BASE}/jobs/{job_id}/resume", timeout=30)
+        if resp.status_code != 202:
+            raise RuntimeError(_error_detail(resp))
+    except (requests.RequestException, RuntimeError) as e:
+        yield None, None, f"Could not resume: {e}", _progress_bar_html(0, "Failed to resume")
+        return
+
+    while True:
+        time.sleep(POLL_INTERVAL_SEC)
+        try:
+            job = _poll_job(job_id)
+        except requests.RequestException as e:
+            yield None, None, f"Lost connection to backend: {e}", _progress_bar_html(0, "Connection lost")
+            return
+
+        done, total = job["chunks_done"], job["chunks_total"]
+        frac = (done / total) if total else 0.0
+
+        if job["status"] == "failed":
+            progress(1.0, desc="Failed")
+            yield None, None, f"Error: {job['error']}", _progress_bar_html(100, "Failed")
+            return
+        if job["status"] == "done":
+            break
+
+        progress(frac, desc=f"Resuming... {done}/{total} chunks")
+        yield (
+            None, None,
+            f"Resuming... {done}/{total} chunks ({int(frac * 100)}%)",
+            _progress_bar_html(frac * 100, f"Chunk {done}/{total}"),
+        )
+
+    audio_path = f"resumed_{job_id}.wav"
+    try:
+        _download_job(job_id, audio_path)
+    except requests.RequestException as e:
+        yield None, None, f"Generated but download failed: {e}", _progress_bar_html(100, "Download failed")
+        return
+
+    captions_path = f"resumed_{job_id}.srt"
+    try:
+        _download_captions(job_id, captions_path)
+    except requests.RequestException:
+        captions_path = None
+
+    progress(1.0, desc="Done")
+    yield (
+        audio_path, captions_path,
+        "Done -- the resumed job finished successfully.",
+        _progress_bar_html(100, "Done"),
+    )
+
+
 # --- Test Voice tab: fast single-shot preview to tune exaggeration/pace ---
 
 def test_voice_generate(text, voice_id, language_label, exaggeration, cfg_weight, progress=gr.Progress()):
@@ -605,6 +702,26 @@ with gr.Blocks(title="Zahra Studio", analytics_enabled=False) as demo:
         queue_progress_html = gr.HTML(_progress_bar_html(0, "Idle"))
         results_files = gr.Files(label="Completed files (audio + captions)")
 
+    with gr.Tab("Resume"):
+        gr.Markdown(
+            "If a generation was interrupted -- an error, a closed terminal window, "
+            "a laptop going to sleep -- the chunks it already finished are saved on disk "
+            "and don't need to be redone. Check here, pick the job, and **Resume** "
+            "picks up from wherever it stopped."
+        )
+        refresh_resumable_btn = gr.Button("Check for unfinished jobs")
+        resumable_table = gr.Dataframe(
+            headers=["Voice", "Progress", "Started", "Script preview"],
+            label="Unfinished jobs",
+            interactive=False,
+        )
+        resume_job_dropdown = gr.Dropdown(label="Job to resume")
+        resume_btn = gr.Button("Resume", variant="primary")
+        resume_progress_html = gr.HTML(_progress_bar_html(0, "Idle"))
+        resume_status = gr.Textbox(label="Status", interactive=False)
+        resume_audio_out = gr.Audio(label="Result", type="filepath")
+        resume_captions_out = gr.File(label="Captions (.srt)")
+
     # -- Clone / delete voice wiring --
     clone_btn.click(clone_voice, inputs=[audio_in, name_in], outputs=[clone_status, voice_dropdown]).then(
         lambda: _voice_choice_updates(2),
@@ -675,6 +792,16 @@ with gr.Blocks(title="Zahra Studio", analytics_enabled=False) as demo:
         generate_all,
         inputs=[queue_state],
         outputs=[queue_state, queue_table, queue_status, results_files, queue_progress_html],
+    )
+
+    # -- Resume wiring --
+    refresh_resumable_btn.click(
+        refresh_resumable_jobs, outputs=[resumable_table, resume_job_dropdown]
+    )
+    resume_btn.click(
+        resume_generation,
+        inputs=[resume_job_dropdown],
+        outputs=[resume_audio_out, resume_captions_out, resume_status, resume_progress_html],
     )
 
 if __name__ == "__main__":

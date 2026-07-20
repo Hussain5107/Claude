@@ -137,6 +137,94 @@ def test_generate_long_form_calls_progress_callback(tmp_path, monkeypatch):
     assert out_path.exists()  # streamed directly, no post-processing enabled
 
 
+def test_generate_long_form_with_job_id_caches_each_chunk_to_disk(tmp_path, monkeypatch):
+    from backend import job_store, tts_engine
+    from backend.config import settings
+
+    monkeypatch.setattr(settings, "enable_loudness_normalization", False)
+    monkeypatch.setattr(settings, "enable_silence_trim", False)
+    monkeypatch.setattr(tts_engine, "load_conditionals", lambda path: "fake-conds")
+    monkeypatch.setattr(tts_engine, "generate_chunk", _fake_generate_chunk_factory([]))
+
+    job_id = "resume-cache-test"
+    audio_utils.generate_long_form(
+        "First sentence.\n\nSecond sentence.\n\nThird sentence.",
+        "/fake/embedding.pt",
+        tmp_path / "out.wav",
+        job_id=job_id,
+    )
+
+    assert job_store.chunk_audio_path(job_id, 0).exists()
+    assert job_store.chunk_audio_path(job_id, 1).exists()
+    assert job_store.chunk_audio_path(job_id, 2).exists()
+
+
+def test_generate_long_form_resume_skips_chunks_already_cached(tmp_path, monkeypatch):
+    """The core resume guarantee: a chunk with cached audio on disk from a
+    previous (interrupted) attempt must not be regenerated."""
+    from backend import job_store, tts_engine
+    from backend.config import settings
+
+    monkeypatch.setattr(settings, "enable_loudness_normalization", False)
+    monkeypatch.setattr(settings, "enable_silence_trim", False)
+    monkeypatch.setattr(tts_engine, "load_conditionals", lambda path: "fake-conds")
+
+    job_id = "resume-skip-test"
+    text = "First sentence.\n\nSecond sentence.\n\nThird sentence."
+
+    # Pre-populate chunk 0's cache, simulating a prior attempt that got that
+    # far before crashing -- distinct audio (1000 samples) so it's obviously
+    # not something the fake generator below would have produced (200 samples).
+    already_done = torch.full((1000,), 0.3, dtype=torch.float32)
+    audio_utils.save_wav(already_done, SAMPLE_RATE, job_store.chunk_audio_path(job_id, 0))
+
+    calls = []
+    monkeypatch.setattr(tts_engine, "generate_chunk", _fake_generate_chunk_factory(calls))
+
+    audio_utils.generate_long_form(text, "/fake/embedding.pt", tmp_path / "out.wav", job_id=job_id)
+
+    # chunk 0's text never went through the (fake) model -- it was reloaded from disk instead
+    assert calls == ["Second sentence.", "Third sentence."]
+
+
+def test_generate_long_form_resume_still_produces_full_correct_output(tmp_path, monkeypatch):
+    """Resuming (some chunks cached, some fresh) must produce audio/captions
+    indistinguishable from a single uninterrupted run."""
+    from backend import job_store, tts_engine
+    from backend.config import settings
+
+    monkeypatch.setattr(settings, "enable_loudness_normalization", False)
+    monkeypatch.setattr(settings, "enable_silence_trim", False)
+    monkeypatch.setattr(tts_engine, "load_conditionals", lambda path: "fake-conds")
+    text = "First sentence.\n\nSecond sentence.\n\nThird sentence."
+
+    # A full, uninterrupted run for comparison.
+    baseline_calls = []
+    monkeypatch.setattr(tts_engine, "generate_chunk", _fake_generate_chunk_factory(baseline_calls))
+    baseline_cues = audio_utils.generate_long_form(text, "/fake/embedding.pt", tmp_path / "baseline.wav")
+
+    # A "resumed" run: chunk 0 pre-cached with the exact audio the fake
+    # generator would have produced, chunks 1-2 generated fresh.
+    job_id = "resume-full-test"
+    seed_wav = torch.full((int(0.2 * SAMPLE_RATE),), 0.5, dtype=torch.float32)
+    audio_utils.save_wav(seed_wav, SAMPLE_RATE, job_store.chunk_audio_path(job_id, 0))
+    resumed_calls = []
+    monkeypatch.setattr(tts_engine, "generate_chunk", _fake_generate_chunk_factory(resumed_calls))
+    resumed_cues = audio_utils.generate_long_form(
+        text, "/fake/embedding.pt", tmp_path / "resumed.wav", job_id=job_id
+    )
+
+    assert len(resumed_cues) == len(baseline_cues)
+    for a, b in zip(resumed_cues, baseline_cues, strict=True):
+        assert a.start == pytest.approx(b.start, abs=1e-6)
+        assert a.end == pytest.approx(b.end, abs=1e-6)
+
+    baseline_audio, baseline_sr = audio_utils._read_pcm16_wav(tmp_path / "baseline.wav")
+    resumed_audio, resumed_sr = audio_utils._read_pcm16_wav(tmp_path / "resumed.wav")
+    assert resumed_sr == baseline_sr
+    assert torch.equal(resumed_audio, baseline_audio)
+
+
 def test_generate_long_form_routes_each_chunk_to_its_tagged_language(tmp_path, monkeypatch):
     from backend import tts_engine
     from backend.config import settings

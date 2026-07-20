@@ -8,7 +8,7 @@ import numpy as np
 import pyloudnorm as pyln
 import torch
 
-from . import tts_engine
+from . import job_store, tts_engine
 from .config import settings
 from .exceptions import InvalidTextError
 from .logging_config import get_logger
@@ -140,8 +140,20 @@ def generate_long_form(
     cfg_weight: float = 0.5,
     on_progress: ProgressCallback | None = None,
     profile: PipelineProfile | None = None,
+    job_id: str | None = None,
+    precomputed_chunks: list[TextChunk] | None = None,
 ) -> list[CaptionCue]:
     """Generates narration for arbitrarily long text, writing it to out_path.
+
+    If ``job_id`` is given, each chunk's finished audio is saved to that job's
+    on-disk cache as soon as it's generated, and any chunk already cached
+    there (from a previous, interrupted attempt at the same job_id) is loaded
+    back instead of regenerated -- this is what makes resuming a crashed or
+    failed job pick up from where it left off rather than starting over.
+    ``precomputed_chunks``, if given, is used as-is instead of re-chunking
+    ``text`` -- the resume path uses this so a resumed job always regenerates
+    the exact same chunks as the original attempt, immune to any chunking
+    settings that may have changed since.
 
     Chunks the text (the underlying model can only generate a limited amount
     of audio per call) and loads the voice embedding once, reusing it across
@@ -182,7 +194,10 @@ def generate_long_form(
             f"{settings.max_text_chars}. Split it into multiple generations."
         )
 
-    chunks = chunk_text_with_languages(text, language_id)
+    if precomputed_chunks is not None:
+        chunks = precomputed_chunks
+    else:
+        chunks = chunk_text_with_languages(text, language_id)
     if not chunks:
         raise InvalidTextError("No text to synthesize")
 
@@ -196,7 +211,7 @@ def generate_long_form(
     needs_postprocess = settings.enable_silence_trim or settings.enable_loudness_normalization
     generate_fn = _generate_buffered if needs_postprocess else _generate_streamed
     cues, cumulative_sec, write_sec, postprocess_sec = generate_fn(
-        chunks, conditionals, out_path, exaggeration, cfg_weight, on_progress, profile
+        chunks, conditionals, out_path, exaggeration, cfg_weight, on_progress, profile, job_id
     )
 
     if profile:
@@ -208,7 +223,7 @@ def generate_long_form(
 
 
 def _generate_streamed(
-    chunks, conditionals, out_path, exaggeration, cfg_weight, on_progress, profile
+    chunks, conditionals, out_path, exaggeration, cfg_weight, on_progress, profile, job_id=None
 ) -> tuple[list[CaptionCue], float, float, float]:
     """No post-processing needed: stream each chunk directly to out_path."""
     writer: wave.Wave_write | None = None
@@ -220,7 +235,7 @@ def _generate_streamed(
     try:
         for i, chunk in enumerate(chunks):
             wav, sample_rate, truncated = _generate_one_chunk(
-                chunk, conditionals, exaggeration, cfg_weight, profile
+                chunk, i, conditionals, exaggeration, cfg_weight, profile, job_id
             )
             if truncated:
                 truncated_count += 1
@@ -246,7 +261,7 @@ def _generate_streamed(
 
 
 def _generate_buffered(
-    chunks, conditionals, out_path, exaggeration, cfg_weight, on_progress, profile
+    chunks, conditionals, out_path, exaggeration, cfg_weight, on_progress, profile, job_id=None
 ) -> tuple[list[CaptionCue], float, float, float]:
     """Post-processing needed: keep chunks as in-memory tensors (avoids a
     wasteful disk round-trip since we need a full in-memory view anyway)."""
@@ -258,7 +273,7 @@ def _generate_buffered(
 
     for i, chunk in enumerate(chunks):
         wav, sample_rate, truncated = _generate_one_chunk(
-            chunk, conditionals, exaggeration, cfg_weight, profile
+            chunk, i, conditionals, exaggeration, cfg_weight, profile, job_id
         )
         if truncated:
             truncated_count += 1
@@ -291,15 +306,25 @@ def _generate_buffered(
     return cues, cumulative_sec, 0.0, t["elapsed"]
 
 
-def _generate_one_chunk(chunk, conditionals, exaggeration, cfg_weight, profile):
+def _generate_one_chunk(chunk, index, conditionals, exaggeration, cfg_weight, profile, job_id=None):
+    if job_id is not None:
+        cached_path = job_store.chunk_audio_path(job_id, index)
+        if cached_path.exists():
+            wav, sample_rate = _read_pcm16_wav(cached_path)
+            return wav, sample_rate, False
+
     with stage_timer() as t:
-        result = tts_engine.generate_chunk(
+        wav, sample_rate, truncated = tts_engine.generate_chunk(
             chunk.text, conditionals,
             language_id=chunk.language_id, exaggeration=exaggeration, cfg_weight=cfg_weight,
         )
     if profile:
         profile.chunk_generate_sec.append(t["elapsed"])
-    return result
+
+    if job_id is not None:
+        save_wav(wav, sample_rate, job_store.chunk_audio_path(job_id, index))
+
+    return wav, sample_rate, truncated
 
 
 def _append_cue_and_gap(cues, cumulative_sec, chunk, wav, sample_rate) -> tuple[float, torch.Tensor]:

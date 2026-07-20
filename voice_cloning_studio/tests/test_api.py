@@ -171,6 +171,96 @@ def test_job_not_found(client):
     assert client.get("/jobs/does-not-exist").status_code == 404
 
 
+def _failing_generate_long_form(*args, **kwargs):
+    raise RuntimeError("boom")
+
+
+def _succeeding_generate_long_form(content: bytes = b"RIFF-fake-wav-content"):
+    def fake(text, embedding_path, out_path, **kwargs):
+        on_progress = kwargs.get("on_progress")
+        if on_progress:
+            on_progress(1, 1)
+        out_path.write_bytes(content)
+        return [audio_utils.CaptionCue(0.0, 1.0, text)]
+
+    return fake
+
+
+def test_resumable_jobs_lists_failed_job(client, monkeypatch):
+    voice_id = _upload_voice(client, name="ruth").json()["id"]
+    monkeypatch.setattr(audio_utils, "generate_long_form", _failing_generate_long_form)
+
+    resp = client.post(
+        "/generate-speech", data={"text": "Hello there.\n\nSecond part.", "voice_id": voice_id}
+    )
+    job_id = resp.json()["job_id"]
+    _poll_until_done(client, job_id)  # let JobManager mark it failed
+
+    resumable = client.get("/jobs/resumable").json()
+    entry = next((r for r in resumable if r["job_id"] == job_id), None)
+    assert entry is not None
+    assert entry["voice_name"] == "ruth"
+    assert entry["chunks_total"] == 2
+
+
+def test_resumable_jobs_excludes_successfully_completed_job(client, monkeypatch):
+    voice_id = _upload_voice(client, name="sam").json()["id"]
+    monkeypatch.setattr(audio_utils, "generate_long_form", _succeeding_generate_long_form())
+    monkeypatch.setattr(audio_utils, "write_srt", lambda cues, path: path.write_text("captions"))
+
+    resp = client.post("/generate-speech", data={"text": "Hello world.", "voice_id": voice_id})
+    job_id = resp.json()["job_id"]
+    _poll_until_done(client, job_id)
+
+    resumable_ids = {r["job_id"] for r in client.get("/jobs/resumable").json()}
+    assert job_id not in resumable_ids
+
+
+def test_resume_unknown_job_404(client):
+    assert client.post("/jobs/does-not-exist/resume").status_code == 404
+
+
+def test_resume_continues_a_failed_job_and_reaches_done(client, monkeypatch):
+    voice_id = _upload_voice(client, name="tina").json()["id"]
+
+    monkeypatch.setattr(audio_utils, "generate_long_form", _failing_generate_long_form)
+    resp = client.post("/generate-speech", data={"text": "Hello world.", "voice_id": voice_id})
+    job_id = resp.json()["job_id"]
+    first_attempt = _poll_until_done(client, job_id)
+    assert first_attempt["status"] == "failed"
+
+    monkeypatch.setattr(audio_utils, "generate_long_form", _succeeding_generate_long_form(b"resumed-audio"))
+    monkeypatch.setattr(audio_utils, "write_srt", lambda cues, path: path.write_text("resumed captions"))
+
+    resume_resp = client.post(f"/jobs/{job_id}/resume")
+    assert resume_resp.status_code == 202
+    assert resume_resp.json()["job_id"] == job_id
+
+    second_attempt = _poll_until_done(client, job_id)
+    assert second_attempt["status"] == "done"
+    assert client.get(f"/jobs/{job_id}/download").content == b"resumed-audio"
+
+    # the job finished successfully, so it should no longer be resumable
+    resumable_ids = {r["job_id"] for r in client.get("/jobs/resumable").json()}
+    assert job_id not in resumable_ids
+
+
+def test_resume_already_completed_job_returns_404(client, monkeypatch):
+    """A successfully completed job has its manifest/chunk cache cleaned up
+    entirely (nothing left to resume), so trying to resume it afterwards is
+    indistinguishable from resuming a job_id that never existed."""
+    voice_id = _upload_voice(client, name="uma").json()["id"]
+    monkeypatch.setattr(audio_utils, "generate_long_form", _succeeding_generate_long_form())
+    monkeypatch.setattr(audio_utils, "write_srt", lambda cues, path: path.write_text("captions"))
+
+    resp = client.post("/generate-speech", data={"text": "Hello world.", "voice_id": voice_id})
+    job_id = resp.json()["job_id"]
+    _poll_until_done(client, job_id)
+
+    resume_resp = client.post(f"/jobs/{job_id}/resume")
+    assert resume_resp.status_code == 404
+
+
 def test_captions_not_ready_before_job_done(client, monkeypatch):
     voice_id = _upload_voice(client, name="hank").json()["id"]
 
