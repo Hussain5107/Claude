@@ -142,16 +142,23 @@ _LANGUAGE_TAG_PATTERN = re.compile(r"\[(\w{2})\](.*?)\[/\1\]", re.IGNORECASE | r
 def _progress_bar_html(percent: float, label: str = "") -> str:
     """A dedicated, always-visible progress bar -- Gradio's built-in gr.Progress()
     renders as a subtle overlay on the button that's easy to miss, so this
-    gives a clear percentage readout regardless of theme."""
+    gives a big percentage readout regardless of theme. The flowing-gradient
+    animation (zahra-flow) is defined once in the banner's <style> block."""
     pct = max(0.0, min(100.0, percent))
     return f"""
-    <div style="margin: 6px 0;">
-      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
-        <span>{label}</span><span><b>{pct:.0f}%</b></span>
+    <div style="margin:10px 0;font-family:ui-sans-serif,system-ui,'Segoe UI',sans-serif;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+        <span style="font-size:12px;letter-spacing:.6px;text-transform:uppercase;
+                     color:#9a8fa8;font-weight:600;">{label}</span>
+        <span style="font-size:24px;font-weight:800;line-height:1;
+                     background:linear-gradient(90deg,#7b4fd0,#d84f8f);
+                     -webkit-background-clip:text;background-clip:text;color:transparent;">{pct:.0f}%</span>
       </div>
-      <div style="width:100%;background:rgba(128,128,128,0.25);border-radius:8px;
-                  overflow:hidden;height:16px;">
-        <div style="width:{pct}%;background:#4f8cff;height:100%;transition:width 0.3s;"></div>
+      <div style="width:100%;height:20px;border-radius:999px;background:rgba(123,79,208,0.14);
+                  overflow:hidden;box-shadow:inset 0 1px 3px rgba(42,24,64,0.18);">
+        <div style="width:{pct}%;height:100%;border-radius:999px;transition:width .4s ease;
+                    background:linear-gradient(90deg,#7b4fd0,#b44fd0,#d84f8f,#e8b64c);
+                    background-size:200% 100%;animation:zahra-flow 2.5s linear infinite;"></div>
       </div>
     </div>
     """
@@ -444,22 +451,78 @@ def generate_all(queue, progress=gr.Progress()):
 def _load_logo_html() -> str:
     svg = (ASSETS_DIR / "logo.svg").read_text()
     return f"""
-    <div style="display:flex;align-items:center;gap:16px;margin-bottom:8px;">
-      <div style="width:280px;max-width:60vw;">{svg}</div>
-      <div style="color:#666;font-size:0.95em;">
-        Clone your voice once, narrate any script, unlimited, free.
+    <style>
+      @keyframes zahra-flow {{ 0% {{background-position:0 0;}} 100% {{background-position:200% 0;}} }}
+      @keyframes zahra-twinkle {{ 0%,100% {{opacity:.25;}} 50% {{opacity:1;}} }}
+      @media (prefers-reduced-motion: reduce) {{
+        .zahra-banner *, .zahra-banner {{ animation: none !important; }}
+      }}
+    </style>
+    <div class="zahra-banner" style="position:relative;overflow:hidden;border-radius:18px;
+         background:linear-gradient(120deg,#2a1840 0%,#4b2a72 45%,#8a3d78 78%,#b8506e 100%);
+         padding:26px 32px;margin-bottom:14px;display:flex;align-items:center;gap:28px;
+         flex-wrap:wrap;box-shadow:0 10px 30px rgba(42,24,64,0.35);">
+      <div style="width:300px;max-width:70vw;flex-shrink:0;">{svg}</div>
+      <div style="color:#f2e2c9;min-width:220px;flex:1;
+                  font-family:ui-sans-serif,system-ui,'Segoe UI',sans-serif;">
+        <div style="font-size:1.35em;font-weight:700;letter-spacing:.3px;margin-bottom:6px;">
+          Your voice. Any script. Unlimited.
+        </div>
+        <div style="font-size:.95em;opacity:.85;line-height:1.55;">
+          Clone your voice once, then narrate anything -- 23 languages,
+          mixed-language scripts, auto captions. Free, offline, yours.
+        </div>
       </div>
+      <span style="position:absolute;top:18px;right:26px;color:#e8b64c;font-size:20px;
+                   animation:zahra-twinkle 2.8s ease-in-out infinite;">&#10022;</span>
+      <span style="position:absolute;bottom:20px;right:70px;color:#e8b64c;font-size:13px;
+                   animation:zahra-twinkle 3.6s ease-in-out .9s infinite;">&#10022;</span>
+      <span style="position:absolute;top:44px;right:110px;color:#f2e2c9;font-size:10px;
+                   animation:zahra-twinkle 3.1s ease-in-out 1.6s infinite;">&#10022;</span>
     </div>
     """
 
 
-with gr.Blocks(title="Zahra Studio") as demo:
+ZAHRA_CSS = """
+.gradio-container { max-width: 1100px !important; margin: 0 auto !important; }
+gradio-app {
+  background: linear-gradient(180deg, #faf5ec 0%, #f7eef6 55%, #f2ecfa 100%) !important;
+}
+.dark gradio-app, gradio-app.dark {
+  background: linear-gradient(180deg, #191221 0%, #221830 60%, #241a2e 100%) !important;
+}
+button.primary {
+  background: linear-gradient(90deg, #7b4fd0, #d84f8f) !important;
+  border: none !important;
+  color: #fff !important;
+  font-weight: 600 !important;
+  box-shadow: 0 4px 14px rgba(123, 79, 208, 0.35) !important;
+}
+button.primary:hover { filter: brightness(1.08); }
+.tab-nav button.selected {
+  color: #7b4fd0 !important;
+  font-weight: 700 !important;
+  border-bottom: 3px solid #d84f8f !important;
+}
+"""
+
+
+ZAHRA_THEME = gr.themes.Soft(
+    primary_hue="purple",
+    secondary_hue="rose",
+    neutral_hue="stone",
+    font=["ui-sans-serif", "system-ui", "Segoe UI", "sans-serif"],
+    font_mono=["ui-monospace", "Consolas", "monospace"],
+)
+
+with gr.Blocks(title="Zahra Studio", analytics_enabled=False) as demo:
     gr.HTML(_load_logo_html())
 
     with gr.Tab("Clone New Voice"):
-        audio_in = gr.Audio(type="filepath", label="Reference voice clip (10-20s, clean, single speaker)")
-        name_in = gr.Textbox(label="Voice name")
-        clone_btn = gr.Button("Save voice")
+        with gr.Row():
+            audio_in = gr.Audio(type="filepath", label="Reference voice clip (10-20s, clean, single speaker)")
+            name_in = gr.Textbox(label="Voice name")
+        clone_btn = gr.Button("Save voice", variant="primary")
         clone_status = gr.Textbox(label="Status", interactive=False)
 
         gr.Markdown("### Manage saved voices")
@@ -473,12 +536,16 @@ with gr.Blocks(title="Zahra Studio") as demo:
             "much faster than waiting on a full script to find out the settings are off. "
             "Picking a voice with saved defaults auto-fills its last-saved settings."
         )
-        test_voice_dropdown = gr.Dropdown(label="Voice", choices=fetch_voice_choices())
-        test_lang_dropdown = gr.Dropdown(label="Language", choices=list(LANGUAGES.keys()), value="English")
-        test_exaggeration = gr.Slider(0, 1, value=0.5, label="Exaggeration")
-        test_cfg = gr.Slider(0, 1, value=0.5, label="Pace / stability (cfg weight)")
+        with gr.Row():
+            test_voice_dropdown = gr.Dropdown(label="Voice", choices=fetch_voice_choices())
+            test_lang_dropdown = gr.Dropdown(
+                label="Language", choices=list(LANGUAGES.keys()), value="English"
+            )
+        with gr.Row():
+            test_exaggeration = gr.Slider(0, 1, value=0.5, label="Exaggeration")
+            test_cfg = gr.Slider(0, 1, value=0.5, label="Pace / stability (cfg weight)")
         test_text = gr.Textbox(label="Test sentence", value=TEST_SENTENCE, lines=3)
-        test_btn = gr.Button("Generate test")
+        test_btn = gr.Button("Generate test", variant="primary")
         test_progress_html = gr.HTML(_progress_bar_html(0, "Idle"))
         test_audio_out = gr.Audio(label="Preview", type="filepath")
         test_status = gr.Textbox(label="Status", interactive=False)
@@ -505,11 +572,13 @@ with gr.Blocks(title="Zahra Studio") as demo:
         )
         copy_from_test_btn = gr.Button("Copy voice + settings from Test Voice")
 
-        voice_dropdown = gr.Dropdown(label="Saved voice", choices=fetch_voice_choices())
-        refresh_btn = gr.Button("Refresh voice list")
-        lang_dropdown = gr.Dropdown(label="Language", choices=list(LANGUAGES.keys()), value="English")
-        exaggeration_slider = gr.Slider(0, 1, value=0.5, label="Exaggeration")
-        cfg_slider = gr.Slider(0, 1, value=0.5, label="Pace / stability (cfg weight)")
+        with gr.Row():
+            voice_dropdown = gr.Dropdown(label="Saved voice", choices=fetch_voice_choices())
+            lang_dropdown = gr.Dropdown(label="Language", choices=list(LANGUAGES.keys()), value="English")
+        refresh_btn = gr.Button("Refresh voice list", size="sm")
+        with gr.Row():
+            exaggeration_slider = gr.Slider(0, 1, value=0.5, label="Exaggeration")
+            cfg_slider = gr.Slider(0, 1, value=0.5, label="Pace / stability (cfg weight)")
         text_in = gr.Textbox(label="Script text", lines=10)
         duration_estimate = gr.Markdown(estimate_duration(""))
 
@@ -609,4 +678,4 @@ with gr.Blocks(title="Zahra Studio") as demo:
     )
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(theme=ZAHRA_THEME, css=ZAHRA_CSS)

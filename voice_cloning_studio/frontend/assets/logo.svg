@@ -1,19 +1,48 @@
-<svg viewBox="0 0 640 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zahra Studio logo">
-  <text x="30" y="100" font-family="'Arial Black','Helvetica Neue',Arial,sans-serif"
-        font-size="76" font-weight="900" letter-spacing="3" fill="#1a1a1a">ZAHRA</text>
+<svg viewBox="0 0 640 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zahra Studio logo">
+  <defs>
+    <linearGradient id="zs-cream" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f2e2c9"/>
+    </linearGradient>
+    <linearGradient id="zs-gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f6d287"/>
+      <stop offset="1" stop-color="#e8b64c"/>
+    </linearGradient>
+    <linearGradient id="zs-wave" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#9d6cff"/>
+      <stop offset="0.55" stop-color="#ff6cab"/>
+      <stop offset="1" stop-color="#e8b64c"/>
+    </linearGradient>
+  </defs>
 
-  <g transform="translate(565,45)" fill="#1a1a1a">
-    <path d="M14 0 C15 9 18 12 27 13 C18 14 15 17 14 26 C13 17 10 14 1 13 C10 12 13 9 14 0 Z"/>
-    <path d="M36 22 C36.6 26.5 38.2 28.1 42.5 28.7 C38.2 29.3 36.6 30.9 36 35.4 C35.4 30.9 33.8 29.3 29.5 28.7 C33.8 28.1 35.4 26.5 36 22 Z"/>
+  <text x="30" y="100" font-family="'Arial Black','Helvetica Neue',Arial,sans-serif"
+        font-size="76" font-weight="900" letter-spacing="3" fill="url(#zs-cream)">ZAHRA</text>
+
+  <g fill="url(#zs-gold)">
+    <path d="M579 32 C580 41 583 44 592 45 C583 46 580 49 579 58 C578 49 575 46 566 45 C575 44 578 41 579 32 Z"/>
+    <path d="M601 54 C601.6 58.5 603.2 60.1 607.5 60.7 C603.2 61.3 601.6 62.9 601 67.4 C600.4 62.9 598.8 61.3 594.5 60.7 C598.8 60.1 600.4 58.5 601 54 Z"/>
   </g>
 
-  <path d="M60 200 C 20 205, 5 195, 8 178 C 10 165, 26 163, 30 175
-           C 33 184, 22 190, 15 183
-           M60 200 C 130 150, 190 155, 230 175"
-        fill="none" stroke="#1a1a1a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="url(#zs-wave)">
+    <rect x="34"  y="140" width="9" height="18" rx="4.5"/>
+    <rect x="52"  y="128" width="9" height="42" rx="4.5"/>
+    <rect x="70"  y="118" width="9" height="62" rx="4.5"/>
+    <rect x="88"  y="132" width="9" height="34" rx="4.5"/>
+    <rect x="106" y="122" width="9" height="54" rx="4.5"/>
+    <rect x="124" y="136" width="9" height="26" rx="4.5"/>
+    <rect x="142" y="126" width="9" height="46" rx="4.5"/>
+    <rect x="160" y="140" width="9" height="18" rx="4.5"/>
+    <rect x="178" y="133" width="9" height="32" rx="4.5"/>
+    <rect x="196" y="143" width="9" height="12" rx="4.5"/>
+  </g>
 
-  <text x="237" y="207" font-family="'Segoe Script','Brush Script MT','Lucida Handwriting',cursive"
-        font-size="92" fill="#f2e2c9" transform="rotate(-4 237 207)">Studio</text>
-  <text x="232" y="202" font-family="'Segoe Script','Brush Script MT','Lucida Handwriting',cursive"
-        font-size="92" fill="#1a1a1a" transform="rotate(-4 232 202)">Studio</text>
+  <path d="M60 236 C 20 241, 5 231, 8 214 C 10 201, 26 199, 30 211
+           C 33 220, 22 226, 15 219
+           M60 236 C 130 186, 190 191, 230 211"
+        fill="none" stroke="url(#zs-gold)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <text x="237" y="243" font-family="'Segoe Script','Brush Script MT','Lucida Handwriting',cursive"
+        font-size="92" fill="rgba(42,24,64,0.55)" transform="rotate(-4 237 243)">Studio</text>
+  <text x="232" y="238" font-family="'Segoe Script','Brush Script MT','Lucida Handwriting',cursive"
+        font-size="92" fill="url(#zs-gold)" transform="rotate(-4 232 238)">Studio</text>
 </svg>
