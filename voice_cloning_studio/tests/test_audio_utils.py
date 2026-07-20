@@ -204,9 +204,13 @@ def test_generate_long_form_resume_still_produces_full_correct_output(tmp_path, 
     baseline_cues = audio_utils.generate_long_form(text, "/fake/embedding.pt", tmp_path / "baseline.wav")
 
     # A "resumed" run: chunk 0 pre-cached with the exact audio the fake
-    # generator would have produced, chunks 1-2 generated fresh.
+    # generator would have produced, chunks 1-2 generated fresh. Real cached
+    # chunks always went through _generate_one_chunk's edge fade before being
+    # saved, so the seed must match that -- otherwise this is testing a chunk
+    # shape that could never actually occur.
     job_id = "resume-full-test"
     seed_wav = torch.full((int(0.2 * SAMPLE_RATE),), 0.5, dtype=torch.float32)
+    seed_wav = audio_utils._apply_edge_fade(seed_wav, SAMPLE_RATE)
     audio_utils.save_wav(seed_wav, SAMPLE_RATE, job_store.chunk_audio_path(job_id, 0))
     resumed_calls = []
     monkeypatch.setattr(tts_engine, "generate_chunk", _fake_generate_chunk_factory(resumed_calls))
@@ -323,6 +327,41 @@ def test_trim_silence_on_all_silence_returns_unchanged():
     trimmed, trimmed_start_sec = audio_utils._trim_silence(audio, sr, -40.0)
     assert trimmed.shape == audio.shape
     assert trimmed_start_sec == 0.0
+
+
+def test_apply_edge_fade_ramps_start_and_end_to_zero():
+    sr = 16000
+    wav = torch.full((int(0.5 * sr),), 0.8, dtype=torch.float32)
+    faded = audio_utils._apply_edge_fade(wav, sr, fade_ms=15.0)
+
+    assert faded[0] == pytest.approx(0.0, abs=1e-6)
+    assert faded[-1] == pytest.approx(0.0, abs=1e-6)
+    fade_samples = int(sr * 15.0 / 1000)
+    assert faded[fade_samples // 2] == pytest.approx(0.4, abs=0.05)  # partway through the ramp
+
+
+def test_apply_edge_fade_leaves_the_middle_untouched():
+    sr = 16000
+    wav = torch.full((int(0.5 * sr),), 0.8, dtype=torch.float32)
+    faded = audio_utils._apply_edge_fade(wav, sr, fade_ms=15.0)
+
+    midpoint = len(wav) // 2
+    assert faded[midpoint] == pytest.approx(0.8, abs=1e-6)
+
+
+def test_apply_edge_fade_is_safe_on_chunks_shorter_than_the_fade_window():
+    sr = 16000
+    wav = torch.full((10,), 0.8, dtype=torch.float32)  # far shorter than a 15ms fade window
+    faded = audio_utils._apply_edge_fade(wav, sr, fade_ms=15.0)
+
+    assert faded.shape == wav.shape
+    assert not torch.isnan(faded).any()
+
+
+def test_apply_edge_fade_on_empty_audio_is_safe():
+    sr = 16000
+    faded = audio_utils._apply_edge_fade(torch.zeros(0), sr, fade_ms=15.0)
+    assert faded.shape == (0,)
 
 
 def test_normalize_loudness_keeps_audio_in_valid_range():

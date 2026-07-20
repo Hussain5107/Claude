@@ -306,10 +306,30 @@ def _generate_buffered(
     return cues, cumulative_sec, 0.0, t["elapsed"]
 
 
+_EDGE_FADE_MS = 15.0
+
+
+def _apply_edge_fade(wav: torch.Tensor, sample_rate: int, fade_ms: float = _EDGE_FADE_MS) -> torch.Tensor:
+    """Short fade-in/out at a chunk's very start/end, before it meets the
+    inserted silence gap. Generated audio doesn't reliably trail to exact
+    zero amplitude, and an abrupt jump to silence is audible as a click --
+    this is standard practice at any audio edit/splice point, not specific
+    to TTS."""
+    n = wav.shape[-1]
+    fade_samples = min(int(sample_rate * fade_ms / 1000), n // 2)
+    if fade_samples <= 0:
+        return wav
+    wav = wav.clone()
+    wav[:fade_samples] *= torch.linspace(0.0, 1.0, fade_samples)
+    wav[-fade_samples:] *= torch.linspace(1.0, 0.0, fade_samples)
+    return wav
+
+
 def _generate_one_chunk(chunk, index, conditionals, exaggeration, cfg_weight, profile, job_id=None):
     if job_id is not None:
         cached_path = job_store.chunk_audio_path(job_id, index)
         if cached_path.exists():
+            # already faded before it was cached -- load as-is, don't fade twice
             wav, sample_rate = _read_pcm16_wav(cached_path)
             return wav, sample_rate, False
 
@@ -320,6 +340,8 @@ def _generate_one_chunk(chunk, index, conditionals, exaggeration, cfg_weight, pr
         )
     if profile:
         profile.chunk_generate_sec.append(t["elapsed"])
+
+    wav = _apply_edge_fade(wav, sample_rate)
 
     if job_id is not None:
         save_wav(wav, sample_rate, job_store.chunk_audio_path(job_id, index))
