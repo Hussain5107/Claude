@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Web Content Downloader</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="card">
+    <h1>Web Content Downloader</h1>
+    <p class="sub">Local tool only. Runs on your machine, downloads to your machine.</p>
+
+    <form id="form">
+      <label for="url">Link</label>
+      <input id="url" name="url" type="text" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" required>
+
+      <label for="engine">What kind of link is this?</label>
+      <select id="engine" name="engine">
+        <option value="ytdlp">Video / audio (YouTube, Instagram reels, and 1000+ sites)</option>
+        <option value="gallerydl">Image gallery / photo post (Instagram, Twitter, Pinterest, Reddit…)</option>
+        <option value="file">Direct file link (PDF, ZIP, image — anything with its own URL)</option>
+      </select>
+
+      <div id="modeRow">
+        <label for="mode">Quality</label>
+        <select id="mode" name="mode">
+          <option value="best">Best (no extra tools needed)</option>
+          <option value="video">Highest quality video (needs ffmpeg installed)</option>
+          <option value="audio">Audio only, MP3 (needs ffmpeg installed)</option>
+        </select>
+      </div>
+
+      <button type="submit">Download</button>
+    </form>
+
+    <div id="status" class="status" hidden>
+      <div class="bar"><div id="barFill" class="bar-fill"></div></div>
+      <p id="statusText"></p>
+      <a id="fileLink" href="#" hidden>Save file</a>
+    </div>
+
+    <p id="errorText" class="error" hidden></p>
+
+    <details class="notes">
+      <summary>What this does and doesn't do</summary>
+      <ul>
+        <li>Only download content you own, have permission to save, or that's
+          public/openly licensed. Platform terms of service still apply to
+          you, not just to this tool.</li>
+        <li>Private or age-restricted content, and anything behind a login,
+          generally won't work — that's intentional, not a bug.</li>
+        <li><strong>Scribd is not supported.</strong> Its documents sit behind
+          a paywall/DRM-style viewer, and defeating that isn't something this
+          tool does. If you have a subscription, use Scribd's own Download
+          button instead.</li>
+      </ul>
+    </details>
+  </main>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
