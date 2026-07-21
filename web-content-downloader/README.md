@@ -35,14 +35,29 @@ Then open http://127.0.0.1:5000.
 
 ## What it can download
 
-- **Video / audio** — paste a YouTube, Instagram reel, or any of the 1000+
-  sites `yt-dlp` supports. Pick "Best" for a single-file download with no
-  extra setup, or the ffmpeg-backed options for higher quality / audio-only.
-- **Image gallery / photo post** — Instagram photo posts and carousels,
-  Twitter/X images, Pinterest, Reddit, and other sites `gallery-dl`
-  supports. Multiple images are zipped automatically.
+- **Video / audio** — paste a YouTube, TikTok, or Instagram reel link, or
+  any of the 1000+ sites `yt-dlp` supports. Pick "Best" for a single-file
+  download with no extra setup, or the ffmpeg-backed options for higher
+  quality / audio-only.
+- **Image gallery / photo post** — TikTok photo posts, Instagram photo
+  posts and carousels, Twitter/X images, Pinterest, Reddit, and other
+  sites `gallery-dl` supports. Multiple images are zipped automatically.
 - **Direct file link** — any URL that points straight at a file (PDF, ZIP,
   image, etc.) is streamed straight to disk.
+
+## What it can't do well
+
+**LinkedIn.** Regular LinkedIn post images/videos aren't supported by
+either `yt-dlp` or `gallery-dl` — LinkedIn requires an authenticated
+session to view most content and actively works against scraping (they've
+pursued legal action against scrapers before, e.g. the *hiQ Labs v.
+LinkedIn* case). This app doesn't hard-block `linkedin.com` the way it
+does Scribd, but expect it to fail for ordinary posts. The one thing that
+does work is LinkedIn Learning course videos, and only if you're enrolled
+and have signed `yt-dlp` in with your own session — that needs running
+`yt-dlp --cookies-from-browser <browser> <url>` yourself from a terminal
+(this app doesn't handle login cookies, on purpose — that's credential
+material this tool shouldn't be touching).
 
 ## What it deliberately does not do
 

@@ -17,8 +17,8 @@
 
       <label for="engine">What kind of link is this?</label>
       <select id="engine" name="engine">
-        <option value="ytdlp">Video / audio (YouTube, Instagram reels, and 1000+ sites)</option>
-        <option value="gallerydl">Image gallery / photo post (Instagram, Twitter, Pinterest, Reddit…)</option>
+        <option value="ytdlp">Video / audio (YouTube, TikTok, Instagram reels, and 1000+ sites)</option>
+        <option value="gallerydl">Image gallery / photo post (TikTok, Instagram, Twitter, Pinterest, Reddit…)</option>
         <option value="file">Direct file link (PDF, ZIP, image — anything with its own URL)</option>
       </select>
 
@@ -54,6 +54,11 @@
           a paywall/DRM-style viewer, and defeating that isn't something this
           tool does. If you have a subscription, use Scribd's own Download
           button instead.</li>
+        <li><strong>LinkedIn mostly won't work.</strong> Regular post images
+          and videos aren't supported — LinkedIn requires a login to view
+          most content and actively blocks scraping. LinkedIn Learning
+          course videos work if you're enrolled and yt-dlp is signed in via
+          cookies (see README).</li>
       </ul>
     </details>
   </main>
