@@ -308,3 +308,72 @@ def test_languages_endpoint(client, monkeypatch):
     resp = client.get("/languages")
     assert resp.status_code == 200
     assert resp.json() == {"en": "English", "fr": "French"}
+
+
+def _wav_bytes(freq=440, seconds=2.0, sr=22050):
+    import numpy as np
+    import soundfile as sf
+
+    t = np.arange(int(sr * seconds)) / sr
+    samples = (np.sin(2 * np.pi * freq * t) * 0.5).astype(np.float32)
+    buf = io.BytesIO()
+    sf.write(buf, samples, sr, format="WAV")
+    buf.seek(0)
+    return buf
+
+
+def test_mix_audio_returns_a_playable_wav(client):
+    resp = client.post(
+        "/mix-audio",
+        files={
+            "voice": ("voice.wav", _wav_bytes(seconds=3.0), "audio/wav"),
+            "music": ("music.wav", _wav_bytes(seconds=1.0), "audio/wav"),
+        },
+        data={"voice_gain_db": 0, "music_gain_db": -10, "duck_db": 6},
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "audio/wav"
+    assert len(resp.content) > 1000  # a real WAV body, not an empty/error stub
+
+
+def test_mix_audio_cleans_up_uploaded_and_output_files(client):
+    from backend.config import settings
+
+    before = set(settings.output_dir.glob("mix_*"))
+    resp = client.post(
+        "/mix-audio",
+        files={
+            "voice": ("voice.wav", _wav_bytes(seconds=1.0), "audio/wav"),
+            "music": ("music.wav", _wav_bytes(seconds=1.0), "audio/wav"),
+        },
+    )
+    assert resp.status_code == 200
+    after = set(settings.output_dir.glob("mix_*"))
+    assert after == before  # no leaked temp uploads or output file
+
+
+def test_mix_audio_rejects_unsupported_format(client):
+    resp = client.post(
+        "/mix-audio",
+        files={
+            "voice": ("voice.m4a", _wav_bytes(), "audio/m4a"),
+            "music": ("music.wav", _wav_bytes(), "audio/wav"),
+        },
+    )
+    assert resp.status_code == 400
+    assert "Unsupported voice format" in resp.json()["detail"]
+
+
+def test_mix_audio_rejects_oversized_upload(client, monkeypatch):
+    from backend.config import settings
+
+    monkeypatch.setattr(settings, "max_upload_mb", 0)
+    resp = client.post(
+        "/mix-audio",
+        files={
+            "voice": ("voice.wav", _wav_bytes(seconds=1.0), "audio/wav"),
+            "music": ("music.wav", _wav_bytes(seconds=1.0), "audio/wav"),
+        },
+    )
+    assert resp.status_code == 400
+    assert "exceeds" in resp.json()["detail"]

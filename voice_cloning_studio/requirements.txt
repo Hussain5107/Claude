@@ -8,3 +8,5 @@ python-dotenv
 numpy
 pyloudnorm
 chatterbox-tts
+soundfile
+pedalboard

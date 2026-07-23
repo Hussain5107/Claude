@@ -7,8 +7,9 @@ from pathlib import Path
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
+from starlette.background import BackgroundTask
 
-from . import audio_utils, database, job_store, tts_engine
+from . import audio_utils, database, job_store, mixer, tts_engine
 from .config import settings
 from .exceptions import (
     InvalidAudioError,
@@ -348,3 +349,71 @@ async def download_captions(job_id: str):
     if not job.captions_path:
         raise HTTPException(404, "No captions available for this job")
     return FileResponse(job.captions_path, media_type="text/plain", filename=job.captions_path.name)
+
+
+async def _save_mixer_upload(upload: UploadFile, label: str) -> Path:
+    """Streams an uploaded voice/music file to a temp path in output_dir,
+    enforcing the same size limit as voice-clone uploads and the mixer's
+    own (narrower) format allowlist -- soundfile can't decode .m4a/.aac
+    without ffmpeg, unlike Chatterbox's own reference-clip loader."""
+    ext = Path(upload.filename or f"{label}.wav").suffix.lower() or ".wav"
+    if ext not in mixer.MIXER_ALLOWED_EXTENSIONS:
+        raise InvalidAudioError(
+            f"Unsupported {label} format '{ext}'. Allowed: {', '.join(mixer.MIXER_ALLOWED_EXTENSIONS)}"
+        )
+
+    dest = settings.output_dir / f"mix_upload_{uuid.uuid4().hex}{ext}"
+    size = 0
+    max_bytes = settings.max_upload_mb * 1024 * 1024
+    with dest.open("wb") as f:
+        while chunk := await upload.read(1024 * 1024):
+            size += len(chunk)
+            if size > max_bytes:
+                f.close()
+                dest.unlink(missing_ok=True)
+                raise InvalidAudioError(
+                    f"{label.capitalize()} file exceeds the {settings.max_upload_mb}MB limit"
+                )
+            f.write(chunk)
+    return dest
+
+
+@app.post("/mix-audio")
+async def mix_audio_endpoint(
+    voice: UploadFile = File(...),
+    music: UploadFile = File(...),
+    voice_gain_db: float = Form(0.0),
+    music_gain_db: float = Form(-15.0),
+    fade_in_sec: float = Form(2.0),
+    fade_out_sec: float = Form(3.0),
+    loop_music: bool = Form(True),
+    duck_db: float = Form(0.0),
+):
+    """Mixes a narration track with background music. Synchronous (not a
+    background job): this is single-pass DSP with no model inference, fast
+    even on an hour of audio, so there's no need for the job-polling
+    machinery generation uses."""
+    voice_path = await _save_mixer_upload(voice, "voice")
+    music_path = await _save_mixer_upload(music, "music")
+
+    out_path = settings.output_dir / f"mix_{uuid.uuid4().hex}.wav"
+    try:
+        mixer.mix_audio(
+            voice_path,
+            music_path,
+            out_path,
+            voice_gain_db=voice_gain_db,
+            music_gain_db=music_gain_db,
+            fade_in_sec=fade_in_sec,
+            fade_out_sec=fade_out_sec,
+            loop_music=loop_music,
+            duck_db=duck_db,
+        )
+    finally:
+        voice_path.unlink(missing_ok=True)
+        music_path.unlink(missing_ok=True)
+
+    return FileResponse(
+        out_path, media_type="audio/wav", filename="mixed.wav",
+        background=BackgroundTask(out_path.unlink),
+    )

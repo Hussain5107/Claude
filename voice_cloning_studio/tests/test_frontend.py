@@ -223,3 +223,59 @@ def test_batch_progress_all_done_is_100():
     queue = [_fake_batch_item("done", 4, 4), _fake_batch_item("done", 2, 2)]
     pct, label = gradio_app._batch_progress(queue)
     assert pct == 100.0
+
+
+def test_mix_background_music_requires_voice_file():
+    audio_out, msg = gradio_app.mix_background_music(None, "music.wav", 0, -15, 2, 3, True, 8)
+    assert audio_out is None
+    assert "voice" in msg.lower()
+
+
+def test_mix_background_music_requires_music_file():
+    audio_out, msg = gradio_app.mix_background_music("voice.wav", None, 0, -15, 2, 3, True, 8)
+    assert audio_out is None
+    assert "music" in msg.lower()
+
+
+def test_mix_background_music_success(tmp_path, monkeypatch):
+    voice_file = tmp_path / "voice.wav"
+    music_file = tmp_path / "music.wav"
+    voice_file.write_bytes(b"fake wav data")
+    music_file.write_bytes(b"fake wav data")
+
+    class FakeResp:
+        status_code = 200
+        content = b"RIFF-mixed-wav-bytes"
+
+    monkeypatch.setattr(gradio_app.requests, "post", lambda *a, **k: FakeResp())
+    monkeypatch.chdir(tmp_path)
+
+    audio_out, msg = gradio_app.mix_background_music(
+        str(voice_file), str(music_file), 0, -15, 2, 3, True, 8
+    )
+
+    assert audio_out == "mixed_with_music.wav"
+    assert "Done" in msg
+    assert (tmp_path / "mixed_with_music.wav").read_bytes() == b"RIFF-mixed-wav-bytes"
+
+
+def test_mix_background_music_reports_backend_error(tmp_path, monkeypatch):
+    voice_file = tmp_path / "voice.wav"
+    music_file = tmp_path / "music.wav"
+    voice_file.write_bytes(b"fake")
+    music_file.write_bytes(b"fake")
+
+    class FakeErrorResp:
+        status_code = 400
+        text = ""
+
+        def json(self):
+            return {"detail": "Unsupported voice format"}
+
+    monkeypatch.setattr(gradio_app.requests, "post", lambda *a, **k: FakeErrorResp())
+
+    audio_out, msg = gradio_app.mix_background_music(
+        str(voice_file), str(music_file), 0, -15, 2, 3, True, 8
+    )
+    assert audio_out is None
+    assert "Unsupported voice format" in msg

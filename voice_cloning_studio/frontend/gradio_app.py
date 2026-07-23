@@ -209,6 +209,45 @@ def _download_captions(job_id: str, out_path: str) -> None:
     Path(out_path).write_bytes(resp.content)
 
 
+# --- Add Background Music tab: mix a finished narration with music ---
+
+def mix_background_music(
+    voice_path, music_path, voice_gain_db, music_gain_db, fade_in_sec, fade_out_sec, loop_music, duck_db
+):
+    if not voice_path:
+        return None, "Upload your narration/voice file first."
+    if not music_path:
+        return None, "Upload a background music file first."
+
+    try:
+        with open(voice_path, "rb") as vf, open(music_path, "rb") as mf:
+            resp = requests.post(
+                f"{API_BASE}/mix-audio",
+                files={
+                    "voice": (Path(voice_path).name, vf, "audio/wav"),
+                    "music": (Path(music_path).name, mf, "audio/wav"),
+                },
+                data={
+                    "voice_gain_db": voice_gain_db,
+                    "music_gain_db": music_gain_db,
+                    "fade_in_sec": fade_in_sec,
+                    "fade_out_sec": fade_out_sec,
+                    "loop_music": loop_music,
+                    "duck_db": duck_db,
+                },
+                timeout=300,
+            )
+    except requests.RequestException as e:
+        return None, f"Could not reach backend: {e}"
+
+    if resp.status_code != 200:
+        return None, f"Error: {_error_detail(resp)}"
+
+    out_path = "mixed_with_music.wav"
+    Path(out_path).write_bytes(resp.content)
+    return out_path, "Done -- mixed successfully."
+
+
 # --- Resume tab: recover a job that failed or was cut short (crash, closed
 # window, laptop sleep) without regenerating chunks already finished ---
 
@@ -737,6 +776,39 @@ with gr.Blocks(title="Zahra Studio", analytics_enabled=False) as demo:
         resume_audio_out = gr.Audio(label="Result", type="filepath")
         resume_captions_out = gr.File(label="Captions (.srt)")
 
+    with gr.Tab("Add Background Music"):
+        gr.Markdown(
+            "Mix a finished narration (from Generate Speech, Resume, or any file you have) "
+            "with background music -- looped or trimmed to match its length, faded in/out, "
+            "and optionally **ducked** (automatically quieter while you're speaking, back up "
+            "during pauses) so the music supports the narration instead of fighting it. "
+            "Accepts WAV, MP3, FLAC, or OGG for both tracks."
+        )
+        with gr.Row():
+            mix_voice_in = gr.Audio(type="filepath", label="Narration / voice track")
+            mix_music_in = gr.Audio(type="filepath", label="Background music")
+
+        with gr.Row():
+            mix_voice_gain = gr.Slider(-20, 10, value=0, step=0.5, label="Voice volume (dB)")
+            mix_music_gain = gr.Slider(-40, 10, value=-15, step=0.5, label="Music volume (dB)")
+
+        with gr.Row():
+            mix_fade_in = gr.Slider(0, 10, value=2, step=0.5, label="Music fade in (seconds)")
+            mix_fade_out = gr.Slider(0, 10, value=3, step=0.5, label="Music fade out (seconds)")
+
+        mix_loop = gr.Checkbox(
+            value=True,
+            label="Loop music if it's shorter than the voice track (crossfaded at each seam, no clicks)",
+        )
+        mix_duck_db = gr.Slider(
+            0, 20, value=8, step=1,
+            label="Duck music under your voice (dB quieter while speaking; 0 = off, music stays constant)",
+        )
+
+        mix_btn = gr.Button("Mix", variant="primary")
+        mix_status = gr.Textbox(label="Status", interactive=False)
+        mix_audio_out = gr.Audio(label="Mixed result", type="filepath")
+
     # -- Clone / delete voice wiring --
     clone_btn.click(clone_voice, inputs=[audio_in, name_in], outputs=[clone_status, voice_dropdown]).then(
         lambda: _voice_choice_updates(2),
@@ -822,6 +894,16 @@ with gr.Blocks(title="Zahra Studio", analytics_enabled=False) as demo:
         resume_generation,
         inputs=[resume_job_dropdown],
         outputs=[resume_audio_out, resume_captions_out, resume_status, resume_progress_html],
+    )
+
+    # -- Add Background Music wiring --
+    mix_btn.click(
+        mix_background_music,
+        inputs=[
+            mix_voice_in, mix_music_in, mix_voice_gain, mix_music_gain,
+            mix_fade_in, mix_fade_out, mix_loop, mix_duck_db,
+        ],
+        outputs=[mix_audio_out, mix_status],
     )
 
 if __name__ == "__main__":

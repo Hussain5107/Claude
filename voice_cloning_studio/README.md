@@ -28,6 +28,7 @@ backend/
   audio_utils.py         text chunking + long-form generation orchestration
   jobs.py                 background job manager (generation runs off the request thread)
   job_store.py            disk-persisted job manifests + per-chunk audio cache, for resume
+  mixer.py                background-music mixing (loop/trim, fades, gain, ducking)
 frontend/
   gradio_app.py          UI: clone/manage voices, test-tune settings, queue+batch generate
   assets/logo.svg         Zahra Studio logo
@@ -157,6 +158,18 @@ backend restart, since the progress lives on disk, not in the running
 process's memory. A job's cache is deleted automatically once it finishes
 successfully -- there's nothing to clean up by hand.
 
+**Add Background Music tab:** mix a finished narration (from Generate Speech,
+Resume, or any file you already have) with background music. This isn't a
+simple overlay — the music is looped (crossfaded at each seam, no clicks) or
+trimmed to match the narration's exact length, faded in/out, and each track
+has its own volume control in dB. The most useful control is **ducking**:
+music automatically gets quieter while you're speaking and comes back up
+during pauses, so it supports the narration instead of competing with it —
+detected from your voice track's own loudness envelope, not manually
+keyframed. Accepts WAV/MP3/FLAC/OGG for both tracks (not `.m4a`/`.aac` —
+this feature decodes audio itself rather than going through Chatterbox's
+loader, specifically so it doesn't need ffmpeg installed).
+
 ## Claude Desktop integration
 
 `mcp_server/` is an MCP bridge so you can write a script *and* narrate it in
@@ -192,6 +205,10 @@ Claude session can't reach a server running on your own machine.
 - `POST /jobs/{job_id}/resume` — continues an unfinished job, regenerating
   only the chunks that never completed. Returns `202 {"job_id": "..."}` (the
   same id); poll `/jobs/{job_id}` exactly as for a fresh submission.
+- `POST /mix-audio` — form fields `voice`, `music` (files, `.wav .mp3 .flac
+  .ogg`), `voice_gain_db`, `music_gain_db`, `fade_in_sec`, `fade_out_sec`,
+  `loop_music`, `duck_db` (all optional except the two files). Synchronous —
+  returns the mixed `.wav` directly, no job polling.
 
 ## Development
 
