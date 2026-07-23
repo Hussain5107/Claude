@@ -173,7 +173,7 @@ def estimate_duration(text: str) -> str:
 
 # --- shared job helpers, used by both Test Voice and the Generate Speech queue ---
 
-def _submit_generation(text, voice_id, language_label, exaggeration, cfg_weight) -> str:
+def _submit_generation(text, voice_id, language_label, exaggeration, cfg_weight, temperature) -> str:
     resp = requests.post(
         f"{API_BASE}/generate-speech",
         data={
@@ -182,6 +182,7 @@ def _submit_generation(text, voice_id, language_label, exaggeration, cfg_weight)
             "language": LANGUAGES.get(language_label, "en"),
             "exaggeration": exaggeration,
             "cfg_weight": cfg_weight,
+            "temperature": temperature,
         },
         timeout=30,
     )
@@ -307,7 +308,9 @@ def resume_generation(job_id, progress=gr.Progress()):
 
 # --- Test Voice tab: fast single-shot preview to tune exaggeration/pace ---
 
-def test_voice_generate(text, voice_id, language_label, exaggeration, cfg_weight, progress=gr.Progress()):
+def test_voice_generate(
+    text, voice_id, language_label, exaggeration, cfg_weight, temperature, progress=gr.Progress()
+):
     if not text.strip():
         yield None, "Enter some test text first.", _progress_bar_html(0, "Idle")
         return
@@ -318,7 +321,7 @@ def test_voice_generate(text, voice_id, language_label, exaggeration, cfg_weight
     progress(0, desc="Queuing test...")
     yield None, "Queuing...", _progress_bar_html(0, "Queuing")
     try:
-        job_id = _submit_generation(text, voice_id, language_label, exaggeration, cfg_weight)
+        job_id = _submit_generation(text, voice_id, language_label, exaggeration, cfg_weight, temperature)
     except (requests.RequestException, RuntimeError) as e:
         yield None, f"Could not start test: {e}", _progress_bar_html(0, "Failed to start")
         return
@@ -381,7 +384,7 @@ def _renumber(queue: list[dict]) -> list[dict]:
     return queue
 
 
-def add_to_queue(text, voice_id, language_label, exaggeration, cfg_weight, queue):
+def add_to_queue(text, voice_id, language_label, exaggeration, cfg_weight, temperature, queue):
     queue = list(queue or [])
     if not text.strip():
         return queue, _queue_table(queue), "Enter script text first.", text
@@ -397,6 +400,7 @@ def add_to_queue(text, voice_id, language_label, exaggeration, cfg_weight, queue
         "language_label": language_label,
         "exaggeration": exaggeration,
         "cfg_weight": cfg_weight,
+        "temperature": temperature,
         "text": text,
         "words": words,
         "est_minutes": words / WORDS_PER_MINUTE,
@@ -439,7 +443,7 @@ def load_item_for_editing(index, queue):
         no_change = gr.update()
         return (
             queue, _queue_table(queue), "Invalid item number.",
-            no_change, no_change, no_change, no_change, no_change,
+            no_change, no_change, no_change, no_change, no_change, no_change,
         )
 
     item = queue.pop(idx)
@@ -447,7 +451,8 @@ def load_item_for_editing(index, queue):
     msg = f"Loaded item #{index} into the form -- click 'Add to queue' to re-add it (it'll go to the end)."
     return (
         queue, _queue_table(queue), msg,
-        item["text"], item["voice_id"], item["language_label"], item["exaggeration"], item["cfg_weight"],
+        item["text"], item["voice_id"], item["language_label"],
+        item["exaggeration"], item["cfg_weight"], item.get("temperature", 0.8),
     )
 
 
@@ -482,7 +487,7 @@ def generate_all(queue, progress=gr.Progress()):
         try:
             item["job_id"] = _submit_generation(
                 item["text"], item["voice_id"], item["language_label"],
-                item["exaggeration"], item["cfg_weight"],
+                item["exaggeration"], item["cfg_weight"], item.get("temperature", 0.8),
             )
             item["status"] = "queued"
         except (requests.RequestException, RuntimeError) as e:
@@ -639,8 +644,13 @@ with gr.Blocks(title="Zahra Studio", analytics_enabled=False) as demo:
                 label="Language", choices=list(LANGUAGES.keys()), value="English"
             )
         with gr.Row():
-            test_exaggeration = gr.Slider(0, 1, value=0.5, label="Exaggeration")
+            test_exaggeration = gr.Slider(
+                0, 2, value=0.5, label="Exaggeration (emotional intensity -- try 0.7+ for dramatic delivery)"
+            )
             test_cfg = gr.Slider(0, 1, value=0.5, label="Pace / stability (cfg weight)")
+        test_temperature = gr.Slider(
+            0.05, 1.5, value=0.8, label="Variation (higher = more natural/varied delivery, less monotone)"
+        )
         test_text = gr.Textbox(label="Test sentence", value=TEST_SENTENCE, lines=3)
         test_btn = gr.Button("Generate test", variant="primary")
         test_progress_html = gr.HTML(_progress_bar_html(0, "Idle"))
@@ -674,8 +684,13 @@ with gr.Blocks(title="Zahra Studio", analytics_enabled=False) as demo:
             lang_dropdown = gr.Dropdown(label="Language", choices=list(LANGUAGES.keys()), value="English")
         refresh_btn = gr.Button("Refresh voice list", size="sm")
         with gr.Row():
-            exaggeration_slider = gr.Slider(0, 1, value=0.5, label="Exaggeration")
+            exaggeration_slider = gr.Slider(
+                0, 2, value=0.5, label="Exaggeration (emotional intensity -- try 0.7+ for dramatic delivery)"
+            )
             cfg_slider = gr.Slider(0, 1, value=0.5, label="Pace / stability (cfg weight)")
+        temperature_slider = gr.Slider(
+            0.05, 1.5, value=0.8, label="Variation (higher = more natural/varied delivery, less monotone)"
+        )
         text_in = gr.Textbox(label="Script text", lines=10)
         duration_estimate = gr.Markdown(estimate_duration(""))
 
@@ -744,7 +759,9 @@ with gr.Blocks(title="Zahra Studio", analytics_enabled=False) as demo:
     )
     test_btn.click(
         test_voice_generate,
-        inputs=[test_text, test_voice_dropdown, test_lang_dropdown, test_exaggeration, test_cfg],
+        inputs=[
+            test_text, test_voice_dropdown, test_lang_dropdown, test_exaggeration, test_cfg, test_temperature
+        ],
         outputs=[test_audio_out, test_status, test_progress_html],
     )
     save_defaults_btn.click(
@@ -753,9 +770,9 @@ with gr.Blocks(title="Zahra Studio", analytics_enabled=False) as demo:
         outputs=[test_status],
     )
     copy_from_test_btn.click(
-        lambda v, lg, ex, cfg: (v, lg, ex, cfg),
-        inputs=[test_voice_dropdown, test_lang_dropdown, test_exaggeration, test_cfg],
-        outputs=[voice_dropdown, lang_dropdown, exaggeration_slider, cfg_slider],
+        lambda v, lg, ex, cfg, temp: (v, lg, ex, cfg, temp),
+        inputs=[test_voice_dropdown, test_lang_dropdown, test_exaggeration, test_cfg, test_temperature],
+        outputs=[voice_dropdown, lang_dropdown, exaggeration_slider, cfg_slider, temperature_slider],
     )
 
     # -- Generate Speech queue wiring --
@@ -767,7 +784,10 @@ with gr.Blocks(title="Zahra Studio", analytics_enabled=False) as demo:
     text_in.change(estimate_duration, inputs=[text_in], outputs=[duration_estimate])
     add_btn.click(
         add_to_queue,
-        inputs=[text_in, voice_dropdown, lang_dropdown, exaggeration_slider, cfg_slider, queue_state],
+        inputs=[
+            text_in, voice_dropdown, lang_dropdown, exaggeration_slider, cfg_slider,
+            temperature_slider, queue_state,
+        ],
         outputs=[queue_state, queue_table, queue_status, text_in],
     )
     remove_btn.click(remove_last, inputs=[queue_state], outputs=[queue_state, queue_table, queue_status])
@@ -786,7 +806,7 @@ with gr.Blocks(title="Zahra Studio", analytics_enabled=False) as demo:
         load_item_for_editing,
         inputs=[edit_index, queue_state],
         outputs=[queue_state, queue_table, queue_status, text_in, voice_dropdown, lang_dropdown,
-                 exaggeration_slider, cfg_slider],
+                 exaggeration_slider, cfg_slider, temperature_slider],
     )
     generate_all_btn.click(
         generate_all,

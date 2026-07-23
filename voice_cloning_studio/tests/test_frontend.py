@@ -33,34 +33,35 @@ def test_estimate_duration_ignores_language_tag_markup():
 
 def test_add_to_queue_rejects_empty_text(monkeypatch):
     monkeypatch.setattr(gradio_app, "_voice_label_for_id", lambda vid: "Alice")
-    queue, table, msg, cleared_text = gradio_app.add_to_queue("   ", 1, "English", 0.5, 0.5, [])
+    queue, table, msg, cleared_text = gradio_app.add_to_queue("   ", 1, "English", 0.5, 0.5, 0.8, [])
     assert queue == []
     assert "Enter script text" in msg
 
 
 def test_add_to_queue_rejects_missing_voice():
-    queue, table, msg, cleared_text = gradio_app.add_to_queue("hello", None, "English", 0.5, 0.5, [])
+    queue, table, msg, cleared_text = gradio_app.add_to_queue("hello", None, "English", 0.5, 0.5, 0.8, [])
     assert queue == []
     assert "Pick a voice" in msg
 
 
 def test_add_to_queue_appends_item(monkeypatch):
     monkeypatch.setattr(gradio_app, "_voice_label_for_id", lambda vid: "Alice")
-    queue, table, msg, cleared_text = gradio_app.add_to_queue("hello world", 1, "English", 0.6, 0.4, [])
+    queue, table, msg, cleared_text = gradio_app.add_to_queue("hello world", 1, "English", 0.6, 0.4, 0.9, [])
 
     assert len(queue) == 1
     item = queue[0]
     assert item["voice_label"] == "Alice"
     assert item["words"] == 2
     assert item["status"] == "queued"
+    assert item["temperature"] == 0.9
     assert cleared_text == ""
     assert table == [[1, "Alice", 2, f"{2 / gradio_app.WORDS_PER_MINUTE:.1f} min", "queued", "-"]]
 
 
 def test_add_to_queue_increments_index(monkeypatch):
     monkeypatch.setattr(gradio_app, "_voice_label_for_id", lambda vid: "Alice")
-    queue, *_ = gradio_app.add_to_queue("first item here", 1, "English", 0.5, 0.5, [])
-    queue, *_ = gradio_app.add_to_queue("second item here", 1, "English", 0.5, 0.5, queue)
+    queue, *_ = gradio_app.add_to_queue("first item here", 1, "English", 0.5, 0.5, 0.8, [])
+    queue, *_ = gradio_app.add_to_queue("second item here", 1, "English", 0.5, 0.5, 0.8, queue)
 
     assert [item["n"] for item in queue] == [1, 2]
 
@@ -122,15 +123,16 @@ def test_move_item_out_of_range_is_noop():
 
 def test_load_item_for_editing_removes_and_renumbers(monkeypatch):
     monkeypatch.setattr(gradio_app, "_voice_label_for_id", lambda vid: "Alice")
-    queue, *_ = gradio_app.add_to_queue("first text", 1, "English", 0.6, 0.4, [])
-    queue, *_ = gradio_app.add_to_queue("second text", 1, "English", 0.5, 0.5, queue)
+    queue, *_ = gradio_app.add_to_queue("first text", 1, "English", 0.6, 0.4, 0.9, [])
+    queue, *_ = gradio_app.add_to_queue("second text", 1, "English", 0.5, 0.5, 0.8, queue)
 
-    queue, table, msg, text, voice_id, lang, exag, cfg = gradio_app.load_item_for_editing(1, queue)
+    queue, table, msg, text, voice_id, lang, exag, cfg, temp = gradio_app.load_item_for_editing(1, queue)
 
     assert text == "first text"
     assert voice_id == 1
     assert exag == 0.6
     assert cfg == 0.4
+    assert temp == 0.9
     assert [item["n"] for item in queue] == [1]  # remaining item renumbered
     assert queue[0]["text"] == "second text"
 

@@ -166,6 +166,7 @@ def _submit_generation_job(
     language: str,
     exaggeration: float,
     cfg_weight: float,
+    temperature: float,
     chunks: list[audio_utils.TextChunk],
     initial_chunks_done: int = 0,
 ) -> None:
@@ -186,6 +187,7 @@ def _submit_generation_job(
             language_id=language,
             exaggeration=exaggeration,
             cfg_weight=cfg_weight,
+            temperature=temperature,
             on_progress=on_progress,
             profile=profile,
             job_id=job_id,
@@ -216,6 +218,7 @@ async def generate_speech(
     language: str = Form(None),
     exaggeration: float = Form(None),
     cfg_weight: float = Form(None),
+    temperature: float = Form(None),
 ):
     if not text.strip():
         raise InvalidTextError("Text is required")
@@ -232,6 +235,7 @@ async def generate_speech(
     language = language or settings.default_language
     exaggeration = settings.default_exaggeration if exaggeration is None else exaggeration
     cfg_weight = settings.default_cfg_weight if cfg_weight is None else cfg_weight
+    temperature = settings.default_temperature if temperature is None else temperature
 
     chunks = audio_utils.chunk_text_with_languages(text, language)
     if not chunks:
@@ -245,12 +249,15 @@ async def generate_speech(
         language_id=language,
         exaggeration=exaggeration,
         cfg_weight=cfg_weight,
+        temperature=temperature,
         text=text,
         chunks=[
             job_store.ChunkSpec(c.text, c.is_paragraph_end, c.language_id) for c in chunks
         ],
     )
-    _submit_generation_job(job_id, voice["embedding_path"], text, language, exaggeration, cfg_weight, chunks)
+    _submit_generation_job(
+        job_id, voice["embedding_path"], text, language, exaggeration, cfg_weight, temperature, chunks
+    )
     logger.info("Queued generation job %s for voice_id=%d (%d chars)", job_id, voice_id, len(text))
     return {"job_id": job_id}
 
@@ -296,6 +303,9 @@ async def resume_job(job_id: str):
         manifest["language_id"],
         manifest["exaggeration"],
         manifest["cfg_weight"],
+        # .get(): a manifest written before temperature existed (an in-progress
+        # job resumed after updating the app) won't have this key
+        manifest.get("temperature", settings.default_temperature),
         chunks,
         initial_chunks_done=initial_done,
     )

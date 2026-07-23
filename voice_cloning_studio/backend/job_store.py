@@ -57,6 +57,7 @@ def write_manifest(
     language_id: str,
     exaggeration: float,
     cfg_weight: float,
+    temperature: float,
     text: str,
     chunks: list[ChunkSpec],
 ) -> None:
@@ -68,6 +69,7 @@ def write_manifest(
         "language_id": language_id,
         "exaggeration": exaggeration,
         "cfg_weight": cfg_weight,
+        "temperature": temperature,
         "text": text,
         "chunks": [asdict(c) for c in chunks],
     }

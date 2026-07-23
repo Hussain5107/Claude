@@ -111,6 +111,29 @@ def _fake_generate_chunk_factory(calls, seconds_per_chunk=0.2, truncated=False):
     return fake_generate_chunk
 
 
+def test_generate_long_form_passes_temperature_through_to_generate_chunk(tmp_path, monkeypatch):
+    from backend import tts_engine
+    from backend.config import settings
+
+    monkeypatch.setattr(settings, "enable_loudness_normalization", False)
+    monkeypatch.setattr(settings, "enable_silence_trim", False)
+    monkeypatch.setattr(tts_engine, "load_conditionals", lambda path: "fake-conds")
+
+    received_kwargs = {}
+
+    def fake_generate_chunk(text, conditionals, **kwargs):
+        received_kwargs.update(kwargs)
+        return torch.full((100,), 0.5, dtype=torch.float32), SAMPLE_RATE, False
+
+    monkeypatch.setattr(tts_engine, "generate_chunk", fake_generate_chunk)
+
+    audio_utils.generate_long_form(
+        "Hello there.", "/fake/embedding.pt", tmp_path / "out.wav", temperature=1.1
+    )
+
+    assert received_kwargs["temperature"] == 1.1
+
+
 def test_generate_long_form_calls_progress_callback(tmp_path, monkeypatch):
     from backend import tts_engine
     from backend.config import settings

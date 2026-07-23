@@ -75,6 +75,17 @@ def test_repetition_cutoff_detector_removes_handler_after_context():
     assert len(target.handlers) == handlers_before
 
 
+def test_generate_once_passes_temperature_to_model_generate():
+    fake_model = MagicMock()
+    fake_model.generate.return_value = MagicMock(squeeze=lambda dim: "fake-wav")
+
+    tts_engine._generate_once(fake_model, "hello", "en", exaggeration=0.5, cfg_weight=0.5, temperature=1.2)
+
+    fake_model.generate.assert_called_once_with(
+        "hello", language_id="en", exaggeration=0.5, cfg_weight=0.5, temperature=1.2
+    )
+
+
 def test_load_conditionals_caches_by_path_and_mtime(tmp_path, monkeypatch):
     emb = tmp_path / "voice.pt"
     emb.write_bytes(b"fake")

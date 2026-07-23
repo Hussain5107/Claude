@@ -106,13 +106,26 @@ the original clip on future generations. You can delete a saved voice from
 the same tab.
 
 **Test Voice tab:** before committing to a full script, generate a short
-sentence (editable, a sensible default is prefilled) with a given
-exaggeration/pace setting to hear how it actually sounds — far faster than
-finding out 40 minutes into a full render that the settings are off.
-Selecting a voice auto-fills its last-saved settings if you've saved any;
-**"Save these as default settings for this voice"** remembers them for next
-time. Once you're happy, use **"Copy voice + settings from Test Voice"** in
-Generate Speech instead of re-entering everything.
+sentence (editable, a sensible default is prefilled) with given
+exaggeration/pace/variation settings to hear how it actually sounds — far
+faster than finding out 40 minutes into a full render that the settings
+are off. Selecting a voice auto-fills its last-saved settings if you've
+saved any; **"Save these as default settings for this voice"** remembers
+them for next time. Once you're happy, use **"Copy voice + settings from
+Test Voice"** in Generate Speech instead of re-entering everything.
+
+Three controls shape how expressive/human the result sounds, and are worth
+actually pushing rather than leaving at default if a voice sounds flat:
+- **Exaggeration** — emotional intensity. Default 0.5; the model has no
+  hard ceiling, so the slider goes to 2.0 — try 0.7+ for something more
+  dramatic. (The UI used to cap this at 1.0; that was a self-imposed limit,
+  not a model one.)
+- **Pace / stability (cfg weight)** — lower values (~0.3) read faster/looser,
+  higher reads more deliberate/stable.
+- **Variation** (`temperature`) — how much natural variation the model
+  introduces in delivery. Default 0.8 (Chatterbox's own default); higher
+  sounds less monotone at some risk of instability, lower is flatter but
+  more predictable. This was previously hardcoded and not adjustable at all.
 
 **Generate Speech tab:** a queue, not a single one-shot generation. Add a
 script (per voice, with its own language/exaggeration/pace) to the queue —
@@ -166,9 +179,9 @@ Claude session can't reach a server running on your own machine.
   language}`. Saves them as that voice's remembered settings.
 - `DELETE /voices/{voice_id}` — delete a saved voice and its files.
 - `GET /languages` — supported language codes/names.
-- `POST /generate-speech` — form fields `text`, `voice_id`, `language`
-  (default from config), `exaggeration`, `cfg_weight` (defaults from config).
-  Returns `202 {"job_id": "..."}`.
+- `POST /generate-speech` — form fields `text`, `voice_id`, `language`,
+  `exaggeration`, `cfg_weight`, `temperature` (all optional, defaults from
+  config). Returns `202 {"job_id": "..."}`.
 - `GET /jobs/{job_id}` — `{"status": "queued"|"running"|"done"|"failed",
   "chunks_done": N, "chunks_total": N, "error": "..." | null, "has_captions": bool}`.
 - `GET /jobs/{job_id}/download` — the finished `.wav` (409 if not done yet).

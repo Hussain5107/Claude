@@ -160,7 +160,9 @@ def load_conditionals(embedding_path: str) -> Conditionals:
         raise VoiceProcessingError(e) from e
 
 
-def _generate_once(model, text, language_id, exaggeration, cfg_weight) -> tuple[torch.Tensor, bool]:
+def _generate_once(
+    model, text, language_id, exaggeration, cfg_weight, temperature
+) -> tuple[torch.Tensor, bool]:
     # inference_mode disables autograd tracking entirely (stronger than
     # no_grad: also skips version-counter bookkeeping on every tensor op).
     # Chatterbox doesn't wrap its own generate(), so without this each
@@ -171,6 +173,7 @@ def _generate_once(model, text, language_id, exaggeration, cfg_weight) -> tuple[
             language_id=language_id,
             exaggeration=exaggeration,
             cfg_weight=cfg_weight,
+            temperature=temperature,
         )
     return wav.squeeze(0), detector.triggered
 
@@ -181,21 +184,28 @@ def generate_chunk(
     language_id: str = "en",
     exaggeration: float = 0.5,
     cfg_weight: float = 0.5,
+    temperature: float = 0.8,
 ) -> tuple[torch.Tensor, int, bool]:
     """Generates one chunk, auto-retrying (up to ``max_chunk_retries`` times) if
     Chatterbox's own repetition-safety mechanism cut the result short -- sampling
     is stochastic, so a retry often produces a clean, complete result.
+
+    ``temperature`` (Chatterbox's own default: 0.8) controls how much sampling
+    variation the model introduces -- higher gives more natural, varied
+    delivery at some risk of instability; lower is flatter but more
+    predictable. Distinct from ``exaggeration``, which controls emotional
+    intensity, not variation.
 
     Returns (audio, sample_rate, still_truncated_after_retries).
     """
     model = get_model()
     model.conds = conditionals
     try:
-        wav, truncated = _generate_once(model, text, language_id, exaggeration, cfg_weight)
+        wav, truncated = _generate_once(model, text, language_id, exaggeration, cfg_weight, temperature)
         attempts = 1
         while truncated and attempts <= settings.max_chunk_retries:
             logger.info("Chunk hit repetition cutoff, retrying (attempt %d)...", attempts + 1)
-            wav, truncated = _generate_once(model, text, language_id, exaggeration, cfg_weight)
+            wav, truncated = _generate_once(model, text, language_id, exaggeration, cfg_weight, temperature)
             attempts += 1
     except Exception as e:
         logger.exception("Generation failed for chunk (len=%d chars)", len(text))

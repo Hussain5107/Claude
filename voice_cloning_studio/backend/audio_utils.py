@@ -138,6 +138,7 @@ def generate_long_form(
     language_id: str = "en",
     exaggeration: float = 0.5,
     cfg_weight: float = 0.5,
+    temperature: float = 0.8,
     on_progress: ProgressCallback | None = None,
     profile: PipelineProfile | None = None,
     job_id: str | None = None,
@@ -211,7 +212,7 @@ def generate_long_form(
     needs_postprocess = settings.enable_silence_trim or settings.enable_loudness_normalization
     generate_fn = _generate_buffered if needs_postprocess else _generate_streamed
     cues, cumulative_sec, write_sec, postprocess_sec = generate_fn(
-        chunks, conditionals, out_path, exaggeration, cfg_weight, on_progress, profile, job_id
+        chunks, conditionals, out_path, exaggeration, cfg_weight, temperature, on_progress, profile, job_id
     )
 
     if profile:
@@ -223,7 +224,7 @@ def generate_long_form(
 
 
 def _generate_streamed(
-    chunks, conditionals, out_path, exaggeration, cfg_weight, on_progress, profile, job_id=None
+    chunks, conditionals, out_path, exaggeration, cfg_weight, temperature, on_progress, profile, job_id=None
 ) -> tuple[list[CaptionCue], float, float, float]:
     """No post-processing needed: stream each chunk directly to out_path."""
     writer: wave.Wave_write | None = None
@@ -235,7 +236,7 @@ def _generate_streamed(
     try:
         for i, chunk in enumerate(chunks):
             wav, sample_rate, truncated = _generate_one_chunk(
-                chunk, i, conditionals, exaggeration, cfg_weight, profile, job_id
+                chunk, i, conditionals, exaggeration, cfg_weight, temperature, profile, job_id
             )
             if truncated:
                 truncated_count += 1
@@ -261,7 +262,7 @@ def _generate_streamed(
 
 
 def _generate_buffered(
-    chunks, conditionals, out_path, exaggeration, cfg_weight, on_progress, profile, job_id=None
+    chunks, conditionals, out_path, exaggeration, cfg_weight, temperature, on_progress, profile, job_id=None
 ) -> tuple[list[CaptionCue], float, float, float]:
     """Post-processing needed: keep chunks as in-memory tensors (avoids a
     wasteful disk round-trip since we need a full in-memory view anyway)."""
@@ -273,7 +274,7 @@ def _generate_buffered(
 
     for i, chunk in enumerate(chunks):
         wav, sample_rate, truncated = _generate_one_chunk(
-            chunk, i, conditionals, exaggeration, cfg_weight, profile, job_id
+            chunk, i, conditionals, exaggeration, cfg_weight, temperature, profile, job_id
         )
         if truncated:
             truncated_count += 1
@@ -325,7 +326,9 @@ def _apply_edge_fade(wav: torch.Tensor, sample_rate: int, fade_ms: float = _EDGE
     return wav
 
 
-def _generate_one_chunk(chunk, index, conditionals, exaggeration, cfg_weight, profile, job_id=None):
+def _generate_one_chunk(
+    chunk, index, conditionals, exaggeration, cfg_weight, temperature, profile, job_id=None
+):
     if job_id is not None:
         cached_path = job_store.chunk_audio_path(job_id, index)
         if cached_path.exists():
@@ -337,6 +340,7 @@ def _generate_one_chunk(chunk, index, conditionals, exaggeration, cfg_weight, pr
         wav, sample_rate, truncated = tts_engine.generate_chunk(
             chunk.text, conditionals,
             language_id=chunk.language_id, exaggeration=exaggeration, cfg_weight=cfg_weight,
+            temperature=temperature,
         )
     if profile:
         profile.chunk_generate_sec.append(t["elapsed"])

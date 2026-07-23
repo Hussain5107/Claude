@@ -67,6 +67,7 @@ class Settings:
     # Model / generation defaults
     default_exaggeration: float = field(default_factory=lambda: _env_float("DEFAULT_EXAGGERATION", 0.5))
     default_cfg_weight: float = field(default_factory=lambda: _env_float("DEFAULT_CFG_WEIGHT", 0.5))
+    default_temperature: float = field(default_factory=lambda: _env_float("DEFAULT_TEMPERATURE", 0.8))
     default_language: str = field(default_factory=lambda: _env_str("DEFAULT_LANGUAGE", "en"))
 
     # Performance

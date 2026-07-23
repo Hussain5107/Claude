@@ -12,6 +12,7 @@ def _write_sample_manifest(job_id, n_chunks=3, voice_id=1):
         language_id="en",
         exaggeration=0.5,
         cfg_weight=0.5,
+        temperature=0.8,
         text="Sentence one. Sentence two. Sentence three.",
         chunks=[
             job_store.ChunkSpec(text=f"Sentence {i}.", is_paragraph_end=False, language_id="en")
