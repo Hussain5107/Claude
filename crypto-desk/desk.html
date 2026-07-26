@@ -1,0 +1,501 @@
+<title>Day-Trade Desk — BTC · ETH · SOL</title>
+<style>
+  :root {
+    --bg: #0a0e15;
+    --panel: #121826;
+    --panel-2: #171f30;
+    --line: #232d42;
+    --line-soft: #1b2437;
+    --ink: #e6ebf4;
+    --ink-dim: #9aa7bd;
+    --ink-faint: #64728c;
+    --gold: #e9a840;
+    --gold-soft: #3a2e13;
+    --long: #34c98a;
+    --long-bg: #0f2a20;
+    --short: #f2565f;
+    --short-bg: #2c1216;
+    --neutral: #6f7d97;
+    --neutral-bg: #1a2234;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  :root[data-theme="light"] {
+    --bg: #eef1f6;
+    --panel: #ffffff;
+    --panel-2: #f5f7fb;
+    --line: #d7deea;
+    --line-soft: #e4e9f2;
+    --ink: #161c28;
+    --ink-dim: #4d5a72;
+    --ink-faint: #8492a8;
+    --gold: #b6791b;
+    --gold-soft: #f5e9cf;
+    --long: #128a5b;
+    --long-bg: #dcf3e8;
+    --short: #cc2f3a;
+    --short-bg: #fbe0e2;
+    --neutral: #64728c;
+    --neutral-bg: #e7ecf4;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #eef1f6;
+      --panel: #ffffff;
+      --panel-2: #f5f7fb;
+      --line: #d7deea;
+      --line-soft: #e4e9f2;
+      --ink: #161c28;
+      --ink-dim: #4d5a72;
+      --ink-faint: #8492a8;
+      --gold: #b6791b;
+      --gold-soft: #f5e9cf;
+      --long: #128a5b;
+      --long-bg: #dcf3e8;
+      --short: #cc2f3a;
+      --short-bg: #fbe0e2;
+      --neutral: #64728c;
+      --neutral-bg: #e7ecf4;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 28px 20px 64px; }
+
+  /* ---------- Masthead ---------- */
+  .mast {
+    display: flex; flex-wrap: wrap; align-items: flex-end;
+    justify-content: space-between; gap: 16px;
+    padding-bottom: 18px; border-bottom: 1px solid var(--line);
+  }
+  .mast h1 {
+    margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.02em;
+    display: flex; align-items: center; gap: 11px;
+  }
+  .mast h1 .dot {
+    width: 9px; height: 9px; border-radius: 50%; background: var(--gold);
+    box-shadow: 0 0 0 4px var(--gold-soft);
+  }
+  .eyebrow {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--ink-faint); margin: 0 0 6px;
+  }
+  .mast-right { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+  .stamp {
+    font-family: var(--mono); font-size: 12px; color: var(--ink-dim);
+    text-align: right; line-height: 1.7;
+  }
+  .stamp b { color: var(--ink); font-weight: 600; }
+  .refresh-btn {
+    display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+    font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.02em;
+    color: var(--gold); background: var(--gold-soft);
+    border: 1px solid var(--gold); border-radius: 8px; padding: 8px 13px;
+    transition: transform .12s ease, filter .12s ease;
+  }
+  .refresh-btn:hover { filter: brightness(1.08); }
+  .refresh-btn:active { transform: translateY(1px); }
+  .refresh-btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  .refresh-btn .ico { font-size: 14px; line-height: 1; }
+  .refresh-btn.copied { color: var(--long); background: var(--long-bg); border-color: var(--long); }
+  .refresh-note {
+    max-width: 260px; text-align: right; font-family: var(--mono);
+    font-size: 11px; line-height: 1.6; color: var(--ink-faint);
+  }
+  .refresh-note code {
+    color: var(--gold); background: var(--gold-soft);
+    padding: 1px 5px; border-radius: 4px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .refresh-btn { transition: none; }
+  }
+
+  /* ---------- Pulse strip ---------- */
+  .pulse {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
+    background: var(--line-soft); border: 1px solid var(--line);
+    border-radius: 12px; overflow: hidden; margin: 20px 0 8px;
+  }
+  .pulse .cell { background: var(--panel); padding: 14px 16px; }
+  .pulse .k {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--ink-faint); margin-bottom: 5px;
+  }
+  .pulse .v { font-family: var(--mono); font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .pulse .sub { font-size: 11.5px; color: var(--ink-dim); margin-top: 2px; }
+
+  .tag {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 5px; white-space: nowrap;
+  }
+  .tag.long { color: var(--long); background: var(--long-bg); }
+  .tag.short { color: var(--short); background: var(--short-bg); }
+  .tag.neutral { color: var(--neutral); background: var(--neutral-bg); }
+  .tag.fear { color: var(--short); background: var(--short-bg); }
+
+  .section-label {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--ink-faint);
+    margin: 34px 0 12px; display: flex; align-items: center; gap: 10px;
+  }
+  .section-label::after { content: ""; flex: 1; height: 1px; background: var(--line-soft); }
+
+  /* ---------- Coin cards ---------- */
+  .cards { display: flex; flex-direction: column; gap: 16px; }
+  .card {
+    position: relative; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 20px 22px 22px; overflow: hidden;
+  }
+  .card::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+  }
+  .card.long::before { background: var(--long); }
+  .card.short::before { background: var(--short); }
+  .card.neutral::before { background: var(--neutral); }
+
+  .card-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px 16px; }
+  .coin { display: flex; align-items: baseline; gap: 10px; }
+  .coin .sym { font-size: 20px; font-weight: 800; letter-spacing: -0.01em; }
+  .coin .name { font-size: 12.5px; color: var(--ink-faint); }
+  .price {
+    font-family: var(--mono); font-size: 21px; font-weight: 600;
+    font-variant-numeric: tabular-nums; margin-left: auto;
+  }
+  .price .chg { font-size: 12px; margin-left: 8px; }
+  .thesis { color: var(--ink-dim); font-size: 13.5px; margin: 13px 0 4px; max-width: 68ch; }
+
+  .plan { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+  @media (max-width: 640px) { .plan { grid-template-columns: 1fr; } }
+  .leg {
+    border: 1px solid var(--line-soft); border-radius: 10px; padding: 13px 15px;
+    background: var(--panel-2);
+  }
+  .leg-h {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 11px;
+  }
+  .leg-h .trigger { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); }
+  .rows { display: flex; flex-direction: column; gap: 7px; }
+  .row {
+    display: flex; align-items: center; justify-content: space-between;
+    font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums;
+  }
+  .row .lbl {
+    font-family: var(--sans); font-size: 11px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--ink-faint);
+  }
+  .row .val { font-weight: 600; }
+  .row.entry .val { color: var(--ink); }
+  .row.tp .val { color: var(--long); }
+  .row.sl .val { color: var(--short); }
+  .row .rr { color: var(--gold); }
+  .leg-foot {
+    margin-top: 11px; padding-top: 10px; border-top: 1px dashed var(--line);
+    font-size: 11.5px; color: var(--ink-dim); font-family: var(--mono);
+    display: flex; justify-content: space-between; gap: 8px;
+  }
+
+  /* ---------- Leverage / risk panel ---------- */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 20px 22px;
+  }
+  .panel h3 {
+    margin: 0 0 14px; font-size: 14px; font-weight: 700; letter-spacing: -0.01em;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .lev-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 13px; }
+  .lev-table th, .lev-table td {
+    text-align: right; padding: 8px 6px; font-variant-numeric: tabular-nums;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .lev-table th {
+    font-family: var(--sans); font-size: 10.5px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink-faint); font-weight: 600;
+  }
+  .lev-table th:first-child, .lev-table td:first-child { text-align: left; }
+  .lev-table tr:last-child td { border-bottom: none; }
+  .lev-table .warn { color: var(--short); }
+  .lev-table .ok { color: var(--long); }
+
+  .rules { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 11px; }
+  .rules li { display: flex; gap: 11px; font-size: 13px; color: var(--ink-dim); }
+  .rules li b { color: var(--ink); font-weight: 600; }
+  .rules .n {
+    flex: none; width: 22px; height: 22px; border-radius: 6px;
+    background: var(--gold-soft); color: var(--gold);
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    display: grid; place-items: center;
+  }
+
+  .callout {
+    margin-top: 16px; border: 1px solid var(--line); border-radius: 12px;
+    padding: 15px 18px; background: var(--panel-2);
+    display: flex; gap: 13px; align-items: flex-start;
+  }
+  .callout .bar { flex: none; width: 3px; align-self: stretch; border-radius: 3px; background: var(--gold); }
+  .callout p { margin: 0; font-size: 12.5px; color: var(--ink-dim); }
+  .callout b { color: var(--ink); }
+
+  .foot {
+    margin-top: 34px; padding-top: 18px; border-top: 1px solid var(--line);
+    font-size: 11.5px; color: var(--ink-faint); line-height: 1.7;
+  }
+  .foot a { color: var(--ink-dim); }
+  .src { font-family: var(--mono); font-size: 11px; word-break: break-word; }
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <div>
+      <p class="eyebrow">Futures Desk · Bitget</p>
+      <h1><span class="dot"></span>Day-Trade Desk</h1>
+    </div>
+    <div class="mast-right">
+      <button id="refreshBtn" class="refresh-btn" type="button" aria-label="Copy the refresh command for Claude">
+        <span class="ico" aria-hidden="true">⟳</span> Refresh data
+      </button>
+      <div class="stamp">
+        Snapshot <b>26 Jul 2026</b><br>
+        Reviewed by Claude · not financial advice
+      </div>
+      <p class="refresh-note" id="refreshNote">Levels are a snapshot, not a live feed. Tap <b>Refresh data</b> to copy <code>update desk</code> — send it to Claude and he republishes fresh levels to this same link.</p>
+    </div>
+  </header>
+
+  <!-- Market pulse -->
+  <div class="pulse">
+    <div class="cell">
+      <div class="k">Regime</div>
+      <div class="v">Range-bound</div>
+      <div class="sub">Coiled, breakout pending</div>
+    </div>
+    <div class="cell">
+      <div class="k">Fear &amp; Greed</div>
+      <div class="v">33 <span class="tag fear" style="vertical-align:2px">Fear</span></div>
+      <div class="sub">Providers vary 33–44</div>
+    </div>
+    <div class="cell">
+      <div class="k">BTC ETF flow</div>
+      <div class="v" style="color:var(--short)">−$465M</div>
+      <div class="sub">2-day net outflow</div>
+    </div>
+    <div class="cell">
+      <div class="k">Desk stance</div>
+      <div class="v">Selective</div>
+      <div class="sub">Trade edges, not middles</div>
+    </div>
+  </div>
+
+  <div class="section-label">Trade Plans</div>
+
+  <div class="cards">
+
+    <!-- BTC -->
+    <article class="card neutral">
+      <div class="card-top">
+        <div class="coin"><span class="sym">BTC</span><span class="name">Bitcoin</span></div>
+        <span class="tag neutral">Neutral · trade breakout</span>
+        <span class="price">$64,370 <span class="chg" style="color:var(--ink-faint)">tight range</span></span>
+      </div>
+      <p class="thesis">Locked in a narrow corridor (~$64,250 support / ~$64,400 resistance). No trade in the middle — wait for a decisive break and hold. ETF outflows give a mild downside lean, so don't force the long.</p>
+      <div class="plan">
+        <div class="leg">
+          <div class="leg-h"><span class="tag long">Long</span><span class="trigger">trigger &gt; $64,500</span></div>
+          <div class="rows">
+            <div class="row entry"><span class="lbl">Entry</span><span class="val">64,500 – 64,600</span></div>
+            <div class="row tp"><span class="lbl">TP 1 / TP 2</span><span class="val">65,000 / 65,400</span></div>
+            <div class="row sl"><span class="lbl">Stop</span><span class="val">64,150</span></div>
+          </div>
+          <div class="leg-foot"><span>Risk ≈ 0.55%</span><span class="rr">R:R ≈ 1.4</span></div>
+        </div>
+        <div class="leg">
+          <div class="leg-h"><span class="tag short">Short</span><span class="trigger">trigger &lt; $64,200</span></div>
+          <div class="rows">
+            <div class="row entry"><span class="lbl">Entry</span><span class="val">64,150 – 64,050</span></div>
+            <div class="row tp"><span class="lbl">TP 1 / TP 2</span><span class="val">63,600 / 63,100</span></div>
+            <div class="row sl"><span class="lbl">Stop</span><span class="val">64,550</span></div>
+          </div>
+          <div class="leg-foot"><span>Risk ≈ 0.62%</span><span class="rr">R:R ≈ 1.4</span></div>
+        </div>
+      </div>
+    </article>
+
+    <!-- ETH -->
+    <article class="card long">
+      <div class="card-top">
+        <div class="coin"><span class="sym">ETH</span><span class="name">Ethereum</span></div>
+        <span class="tag long">Mildly bullish</span>
+        <span class="price">$1,930 <span class="chg" style="color:var(--long)">RSI 63</span></span>
+      </div>
+      <p class="thesis">Cleaner structure than BTC — higher lows, RSI 63 (bullish, not overbought), coiling under the big $2,000 level. Best setup on the board today. Favour longs while above $1,860.</p>
+      <div class="plan">
+        <div class="leg">
+          <div class="leg-h"><span class="tag long">Long</span><span class="trigger">pullback or break &gt; $1,945</span></div>
+          <div class="rows">
+            <div class="row entry"><span class="lbl">Entry</span><span class="val">1,900 – 1,910</span></div>
+            <div class="row tp"><span class="lbl">TP 1 / TP 2</span><span class="val">1,975 / 2,000</span></div>
+            <div class="row sl"><span class="lbl">Stop</span><span class="val">1,875</span></div>
+          </div>
+          <div class="leg-foot"><span>Risk ≈ 1.6%</span><span class="rr">R:R ≈ 2.3</span></div>
+        </div>
+        <div class="leg">
+          <div class="leg-h"><span class="tag short">Short</span><span class="trigger">$2,000 reject or &lt; $1,860</span></div>
+          <div class="rows">
+            <div class="row entry"><span class="lbl">Entry</span><span class="val">1,995 / 1,855</span></div>
+            <div class="row tp"><span class="lbl">TP 1 / TP 2</span><span class="val">1,840 / 1,810</span></div>
+            <div class="row sl"><span class="lbl">Stop</span><span class="val">2,010 / 1,895</span></div>
+          </div>
+          <div class="leg-foot"><span>counter-trend</span><span class="rr">only on rejection</span></div>
+        </div>
+      </div>
+    </article>
+
+    <!-- SOL -->
+    <article class="card short">
+      <div class="card-top">
+        <div class="coin"><span class="sym">SOL</span><span class="name">Solana</span></div>
+        <span class="tag short">Weak · defend $74</span>
+        <span class="price">$75.02 <span class="chg" style="color:var(--short)">RSI 43 (1h)</span></span>
+      </div>
+      <p class="thesis">Slipped from the July peak above $82; daily neutral (RSI 52) but hourly in a micro-downtrend (RSI 43, MACD negative). Buyers defending $74; a break of $73 opens deeper downside. Highest-volatility of the three — size smaller.</p>
+      <div class="plan">
+        <div class="leg">
+          <div class="leg-h"><span class="tag long">Long (bounce)</span><span class="trigger">holds $74 support</span></div>
+          <div class="rows">
+            <div class="row entry"><span class="lbl">Entry</span><span class="val">74.0 – 74.3</span></div>
+            <div class="row tp"><span class="lbl">TP 1 / TP 2</span><span class="val">76.0 / 77.6</span></div>
+            <div class="row sl"><span class="lbl">Stop</span><span class="val">73.35</span></div>
+          </div>
+          <div class="leg-foot"><span>Risk ≈ 0.9%</span><span class="rr">R:R ≈ 3.0</span></div>
+        </div>
+        <div class="leg">
+          <div class="leg-h"><span class="tag short">Short</span><span class="trigger">trigger &lt; $73.40</span></div>
+          <div class="rows">
+            <div class="row entry"><span class="lbl">Entry</span><span class="val">73.30 – 73.00</span></div>
+            <div class="row tp"><span class="lbl">TP 1 / TP 2</span><span class="val">71.50 / 70.00</span></div>
+            <div class="row sl"><span class="lbl">Stop</span><span class="val">74.60</span></div>
+          </div>
+          <div class="leg-foot"><span>Risk ≈ 1.9%</span><span class="rr">R:R ≈ 1.9</span></div>
+        </div>
+      </div>
+    </article>
+
+  </div>
+
+  <div class="section-label">Survival Math</div>
+  <div class="grid2">
+
+    <div class="panel">
+      <h3>Leverage vs. liquidation</h3>
+      <table class="lev-table">
+        <thead>
+          <tr><th>Leverage</th><th>Liq. distance*</th><th>Survives daily wick?</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>20×</td><td class="warn">≈ 5%</td><td class="warn">No — wicks hit first</td></tr>
+          <tr><td>10×</td><td>≈ 10%</td><td class="ok">Usually</td></tr>
+          <tr><td>5×</td><td class="ok">≈ 20%</td><td class="ok">Yes</td></tr>
+        </tbody>
+      </table>
+      <div class="callout">
+        <span class="bar"></span>
+        <p><b>Why you get liquidated at 20×:</b> BTC/SOL routinely wick 2–5% intraday. At 20× your liquidation sits ~5% away — the wick reaches it <b>before</b> your planned stop. Dropping to <b>5–10×</b> puts the stop back in control. Same levels, you just survive.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Position sizing — $40 account</h3>
+      <p style="font-size:12.5px;color:var(--ink-dim);margin:0 0 12px">Risk a <b style="color:var(--ink)">fixed $1</b> per trade (2.5%). Position size = risk ÷ stop-distance%.</p>
+      <table class="lev-table">
+        <thead>
+          <tr><th>Trade</th><th>Stop dist.</th><th>Position</th><th>Margin @10×</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>ETH long</td><td>1.6%</td><td>$63</td><td>$6.3</td></tr>
+          <tr><td>SOL long</td><td>0.9%</td><td>$111</td><td>$11.1</td></tr>
+          <tr><td>BTC break</td><td>0.55%</td><td>$182</td><td>$18.2</td></tr>
+        </tbody>
+      </table>
+      <div class="callout">
+        <span class="bar"></span>
+        <p>Tighter stop = bigger position for the <b>same $1 risk</b>. That's the whole game: your loss is fixed, only the size changes. Never size by "how much can I afford to buy."</p>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="section-label">Session Rules</div>
+  <div class="panel">
+    <ul class="rules">
+      <li><span class="n">1</span><span><b>Wait for the trigger.</b> If price hasn't broken the level, there is no trade. Watching is a position.</span></li>
+      <li><span class="n">2</span><span><b>Stop goes on the exchange</b> the moment you enter — never "in your head."</span></li>
+      <li><span class="n">3</span><span><b>TP1 hit → move stop to breakeven.</b> Now the trade is risk-free; let the runner go to TP2.</span></li>
+      <li><span class="n">4</span><span><b>Two losses = done for the day.</b> This single rule is what keeps a small account alive.</span></li>
+      <li><span class="n">5</span><span><b>Max 5–10× leverage.</b> Stick to BTC / ETH / SOL — skip low-cap alts, they wick-liquidate small accounts instantly.</span></li>
+    </ul>
+  </div>
+
+  <footer class="foot">
+    <p><b style="color:var(--ink-dim)">These are reactive technical levels, not predictions.</b> I read structure — I can't see the future. News (Fed, ETF flows, a whale dump) can invalidate any level in minutes. Levels tell you <em>where</em> to act <em>if</em> price gets there; they don't promise it will. Nothing here is financial advice — you place and manage every trade.</p>
+    <p class="src" style="margin-top:10px">Data as of 26 Jul 2026 · Sources: Sunday Guardian (BTC/ETH), InteractiveCrypto (BTC / ETF flows), ZebPay &amp; Cryptonomist (ETH), Cryptonomist &amp; MEXC (SOL), Milk Road / CFGI (Fear &amp; Greed). Prices approximate at snapshot time.</p>
+  </footer>
+
+</div>
+
+<script>
+  // Show a precise "opened" time so the reader always knows this is a snapshot,
+  // never a live feed. No prices are computed or faked client-side.
+  (function () {
+    try {
+      var el = document.querySelector('.stamp');
+      var now = new Date();
+      var opened = now.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+      var note = document.createElement('div');
+      note.style.color = 'var(--ink-faint)';
+      note.style.marginTop = '4px';
+      note.textContent = 'You opened this: ' + opened;
+      el.appendChild(note);
+    } catch (e) { /* non-critical */ }
+  })();
+
+  // Refresh button: copies the exact phrase to send Claude. It does NOT fetch
+  // or fabricate any price data — the page cannot reach the network, and it
+  // will never show numbers it didn't receive from a real snapshot.
+  (function () {
+    var btn = document.getElementById('refreshBtn');
+    var note = document.getElementById('refreshNote');
+    if (!btn) return;
+    var original = btn.innerHTML;
+    var phrase = 'update desk';
+    btn.addEventListener('click', function () {
+      var done = function () {
+        btn.classList.add('copied');
+        btn.innerHTML = '<span class="ico" aria-hidden="true">✓</span> Copied “update desk”';
+        if (note) note.innerHTML = 'Now paste <code>update desk</code> to Claude in chat. He pulls fresh BTC / ETH / SOL data and republishes here — refresh this page to see it.';
+        setTimeout(function () {
+          btn.classList.remove('copied');
+          btn.innerHTML = original;
+        }, 3500);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(phrase).then(done, done);
+      } else {
+        done();
+      }
+    });
+  })();
+</script>
