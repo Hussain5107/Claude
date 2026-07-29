@@ -22,6 +22,12 @@ scratch space for new Claude Code sessions and as the index below.
 | [smart-finance-pro](https://github.com/Hussain5107/smart-finance-pro) | Browser-based personal finance tracker *(private)* |
 | [crypto-day-trading-desk](https://github.com/Hussain5107/crypto-day-trading-desk) | BTC/ETH/SOL day-trading dashboard *(private)* |
 
+## Third-party tools
+
+| Tool | Notes |
+|---|---|
+| [ai-job-search](https://github.com/MadsLorentzen/ai-job-search) | Claude Code job search / CV tailoring framework. Fork it to your own account; setup notes in [ai-job-search-install.md](ai-job-search-install.md) |
+
 ## Starting a new project
 
 Create a dedicated repository for it **first**, then point the Claude Code
