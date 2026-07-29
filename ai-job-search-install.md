@@ -94,6 +94,49 @@ populates `CLAUDE.md`, the profile skill files, `cv/main_example.tex`, and
 `search-queries.md`. After that: `/scrape` to find jobs, `/apply <url>` to
 generate an application, `/interview` to prep.
 
+## 1b. Two template fixes needed on TeX Live
+
+**Verified:** on TeX Live 2023 (Debian/Ubuntu, moderncv 2.3.1) the stock
+`cv/main_example.tex` does **not** compile — it fails twice. Upstream targets
+MiKTeX/MacTeX, which ship a newer moderncv, so these only bite on Linux TeX
+Live. The cover letter (`cover.cls`, xelatex) compiles clean untouched.
+
+**Fix 1 — `\firstnamestyle` undefined.** moderncv 2.3.1 styles the whole name
+through `\namestyle`; the split `\firstnamestyle`/`\lastnamestyle` came later.
+Replace those two `\renewcommand` lines with a version check:
+
+```latex
+\makeatletter
+\@ifundefined{firstnamestyle}{%
+  \renewcommand*{\namestyle}[1]{{\fontsize{34}{36}\bfseries\upshape\color{color1}#1}}%
+}{%
+  \renewcommand*{\firstnamestyle}[1]{{\fontsize{34}{36}\bfseries\upshape\color{color1}#1}}%
+  \renewcommand*{\lastnamestyle}[1]{{\fontsize{34}{36}\bfseries\upshape\color{color1}#1}}%
+}
+\makeatother
+```
+
+**Fix 2 — hyperref option clash, then `\hypersetup` undefined.** moderncv loads
+hyperref itself *at* `\begin{document}`. So the template's `\usepackage{hyperref}`
+clashes, and removing it alone leaves `\hypersetup` undefined in the preamble.
+Drop the `\usepackage{hyperref}` line and wrap the settings:
+
+```latex
+\AtBeginDocument{%
+  \hypersetup{colorlinks=true, linkcolor=blue, filecolor=magenta,
+              urlcolor=blue, pdftitle={[YOUR_NAME] - CV},
+              pdfpagemode=FullScreen}%
+}
+```
+
+With both applied: `lualatex -halt-on-error main_example.tex` exits 0, no
+errors, and `pdftotext` extracts a clean text layer for the ATS check.
+
+One cosmetic issue remains, unfixed: the fontawesome contact icons extract as
+the literal words `MOBILE-ALT` and `Envelope` in the PDF text layer. Harmless
+visually, but an ATS reading the text sees those tokens next to your phone and
+email.
+
 ## 2. UAE / Gulf note
 
 Four of the six bundled portals are Danish (`jobbank`, `jobdanmark`,
@@ -125,6 +168,5 @@ methodology change around it.
 
 ## Not verified here
 
-- LaTeX compilation of the CV and cover letter templates (no TeX in the test container)
 - Any live portal query (network policy blocked every job board)
 - `/setup`, `/apply`, `/interview` end to end (they need Claude Code running inside the repo)
