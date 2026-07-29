@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "localsearch"
+version = "0.1.0"
+description = "A local AI search engine over a folder of your own files"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+# Semantic search on top of the built-in keyword index.
+semantic = ["sentence-transformers>=2.2", "numpy>=1.24"]
+# Extra file formats. .docx, .pptx and .epub need no extra libraries.
+formats = ["pypdf>=4.0", "openpyxl>=3.1"]
+all = ["sentence-transformers>=2.2", "numpy>=1.24", "pypdf>=4.0", "openpyxl>=3.1"]
+dev = ["pytest>=7.4"]
+
+[project.scripts]
+localsearch = "localsearch.cli:main"
+
+[tool.setuptools]
+packages = ["localsearch"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

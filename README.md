@@ -22,6 +22,16 @@ scratch space for new Claude Code sessions and as the index below.
 | [smart-finance-pro](https://github.com/Hussain5107/smart-finance-pro) | Browser-based personal finance tracker *(private)* |
 | [crypto-day-trading-desk](https://github.com/Hussain5107/crypto-day-trading-desk) | BTC/ETH/SOL day-trading dashboard *(private)* |
 
+## In this repo
+
+| Project | What it is |
+|---|---|
+| [localsearch](docs/localsearch.md) | Local AI search engine — point it at a folder, ask questions, get cited answers |
+
+`localsearch` lives here for now because the session was pinned to this
+repository. Move it to `Hussain5107/localsearch` when convenient and replace
+this section with a row in the table above.
+
 ## Starting a new project
 
 Create a dedicated repository for it **first**, then point the Claude Code
