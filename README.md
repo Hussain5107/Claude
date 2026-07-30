@@ -21,6 +21,7 @@ scratch space for new Claude Code sessions and as the index below.
 | [hydration-tracker](https://github.com/Hussain5107/hydration-tracker) | HydroMe — single-file browser water intake tracker |
 | [smart-finance-pro](https://github.com/Hussain5107/smart-finance-pro) | Browser-based personal finance tracker *(private)* |
 | [crypto-day-trading-desk](https://github.com/Hussain5107/crypto-day-trading-desk) | BTC/ETH/SOL day-trading dashboard *(private)* |
+| [soprema-document-intellegence](https://github.com/Hussain5107/SOPREMA-DOCUMENT-INTELLEGENCE) | SDI — Windows desktop app for AI-assisted search/analysis over engineering documents (PySide6) *(private)* |
 
 ## Starting a new project
 
