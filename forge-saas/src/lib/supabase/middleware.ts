@@ -1,7 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/", "/login", "/signup", "/pricing", "/auth/callback"];
+// Everything under /auth is public on purpose. The callback has to be reachable
+// before a session exists, and signing out has to be reachable *after* one has
+// expired — bouncing a sign-out to the login screen leaves the user stuck on an
+// error page trying to leave.
+const PUBLIC_PATHS = ["/", "/login", "/signup", "/pricing", "/auth"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -36,7 +40,11 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", path);
-    return NextResponse.redirect(url);
+    // A form post that lands here must not be replayed against /login: the
+    // default 307 preserves the method, and a page answering POST returns 405,
+    // which the browser shows as "This page isn't working". 303 sends the user
+    // to the login screen as a plain GET.
+    return NextResponse.redirect(url, { status: request.method === "GET" ? 307 : 303 });
   }
 
   return response;
