@@ -243,7 +243,9 @@ export default function ExerciseCard({
           />
 
           <div className="mt-4 flex flex-col items-center gap-4 rounded-2xl border border-[var(--border)] bg-[var(--bg-2)] p-4 sm:flex-row">
-            <span className="h-[150px] w-full shrink-0 overflow-hidden rounded-xl bg-[var(--surface)] sm:h-[120px] sm:w-[120px]">
+            {/* Square, not a full-width strip: the photos are square, so a wide
+                letterbox would crop the lifter's head and feet off. */}
+            <span className="h-[132px] w-[132px] shrink-0 overflow-hidden rounded-xl bg-[var(--surface)] sm:h-[120px] sm:w-[120px]">
               {!imgError ? (
                 <Image
                   src={ex.image}

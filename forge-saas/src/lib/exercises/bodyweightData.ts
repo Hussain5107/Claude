@@ -17,7 +17,9 @@ function ex(
     tempo: "2-1-2",
     difficulty: "beginner",
     breathing: "Exhale on exertion (the lift), inhale on the lowering phase.",
-    image: "/images/placeholder-exercise.jpg",
+    // Every photo is named after its slug, so the path is derived rather than
+    // repeated on each entry. An explicit `image` in overrides still wins.
+    image: `/images/${overrides.slug}.jpg`,
     videoUrl: null,
     ...overrides,
   };
