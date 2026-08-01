@@ -184,6 +184,9 @@ export default function DashboardClient({
           >
             🎙️ Coach {voiceEnabled ? "on" : "off"}
           </button>
+          <Link href="/dashboard/gyms" className="hover:text-[var(--text)]">
+            Gyms
+          </Link>
           <Link href="/dashboard/progress" className="hover:text-[var(--text)]">
             Progress
           </Link>
