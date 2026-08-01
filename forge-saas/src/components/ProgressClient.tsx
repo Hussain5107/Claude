@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { saveProgressPhoto, deleteProgressPhoto } from "@/app/dashboard/progress/actions";
 import { Button, Card, Input } from "./ui";
 import { Logo } from "./Logo";
+import AiCoachPanel from "./AiCoachPanel";
 
 interface SetRow {
   log_date: string;
@@ -251,6 +252,7 @@ export default function ProgressClient({ sets, personalRecords, streak, userId, 
           </div>
         )}
       </Card>
+      <AiCoachPanel />
     </main>
   );
 }
