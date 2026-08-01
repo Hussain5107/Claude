@@ -23,6 +23,7 @@ import ReviewPrompt from "./ReviewPrompt";
 import InstallAppPrompt from "./InstallAppPrompt";
 import LevelUpPrompt from "./LevelUpPrompt";
 import { PrepList, CardioCard } from "./SessionExtras";
+import NutritionToast from "./NutritionToast";
 import { isBirthdayToday } from "@/lib/dates";
 import { weekdayToDayNumber } from "@/lib/dayRotation";
 import type { ProgressionStatus } from "@/lib/progression";
@@ -245,6 +246,14 @@ export default function DashboardClient({
       </header>
 
       <InstallAppPrompt />
+      {day && selectedIndex === today.getDay() && (
+        <NutritionToast
+          goal={program.goal}
+          isoDate={selectedDate}
+          completed={completedCount}
+          total={day.exercises.length}
+        />
+      )}
       <LevelUpPrompt
         eligible={progression.eligible}
         nextLabel={progression.nextLabel}
