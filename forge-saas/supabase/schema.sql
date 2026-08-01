@@ -380,3 +380,20 @@ create index if not exists daily_intake_user_date_idx on public.daily_intake (us
 -- exact plan they already have.
 
 alter table public.profiles add column if not exists days_per_week int not null default 6 check (days_per_week between 3 and 6);
+
+-- 15. PUBLIC REVIEW SUMMARY ----------------------------------------------------
+-- The reviews table is readable only by its author, which is what we want for
+-- the comments people write. But the landing page needs an overall rating, and
+-- it's shown to logged-out visitors.
+--
+-- This view exposes ONLY the aggregate — never a row, a comment, or a user id.
+-- Views run with their owner's privileges, so it can read across the table
+-- without loosening the row policy on reviews itself.
+
+create or replace view public.review_stats as
+  select
+    count(*)::int                             as review_count,
+    round(avg(rating)::numeric, 2)::float8    as average_rating
+  from public.reviews;
+
+grant select on public.review_stats to anon, authenticated;

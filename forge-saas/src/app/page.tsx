@@ -5,6 +5,10 @@ import LandingNav from "@/components/landing/LandingNav";
 import Reveal from "@/components/landing/Reveal";
 import DashboardPreview from "@/components/landing/DashboardPreview";
 import { Logo } from "@/components/Logo";
+import RatingBadge from "@/components/RatingBadge";
+
+// Public marketing page — regenerate hourly rather than querying per visit.
+export const revalidate = 3600;
 
 const STATS = [
   { value: "6", label: "Day PPL program" },
@@ -95,6 +99,8 @@ export default function LandingPage() {
                 <Button className="px-7 py-3 text-base">See how it works</Button>
               </a>
             </div>
+
+            <RatingBadge />
           </div>
 
           <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[24px] border border-[var(--border)] shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
