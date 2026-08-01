@@ -22,9 +22,11 @@ import { Logo } from "./Logo";
 import ReviewPrompt from "./ReviewPrompt";
 import InstallAppPrompt from "./InstallAppPrompt";
 import LevelUpPrompt from "./LevelUpPrompt";
+import { PrepList, CardioCard } from "./SessionExtras";
 import { isBirthdayToday } from "@/lib/dates";
 import { weekdayToDayNumber } from "@/lib/dayRotation";
 import type { ProgressionStatus } from "@/lib/progression";
+import { cardioPlan } from "@/lib/cardio";
 
 interface ProgressRow {
   log_date: string;
@@ -170,6 +172,8 @@ export default function DashboardClient({
     }));
     return { isNewPR: result.isNewPR };
   }
+
+  const isPrepChecked = (slug: string) => progress[`${selectedDate}__${slug}`]?.done ?? false;
 
   async function handleSwap(currentSlug: string, replacementSlug: string) {
     const result = await swapExercise(selectedDayNumber ?? 0, currentSlug, replacementSlug);
@@ -320,16 +324,16 @@ export default function DashboardClient({
             </span>
           </div>
 
-          <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
-            {day.warmup.map((w) => (
-              <div
-                key={w}
-                className="glass shrink-0 whitespace-nowrap rounded-full border border-[var(--border)] px-3.5 py-2 text-xs text-[var(--text-dim)]"
-              >
-                🔸 {w}
-              </div>
-            ))}
-          </div>
+          <PrepList
+            title="🔸 Warm-up"
+            hint="Five to ten minutes here makes the first working set feel far better — and it's where most injuries get avoided."
+            items={day.warmup}
+            slugPrefix="warmup"
+            isChecked={isPrepChecked}
+            onToggle={handleToggleDone}
+          />
+
+          <CardioCard plan={cardioPlan(program.goal, program.experience)} />
 
           <div className="mb-5 flex flex-wrap items-center gap-2.5">
             <input
@@ -373,15 +377,15 @@ export default function DashboardClient({
             })}
           </div>
 
-          <div className="mt-6 flex flex-wrap gap-2">
-            {day.cooldown.map((c) => (
-              <div
-                key={c}
-                className="glass shrink-0 whitespace-nowrap rounded-full border border-[var(--border)] px-3.5 py-2 text-xs text-[var(--text-dim)]"
-              >
-                🧊 {c}
-              </div>
-            ))}
+          <div className="mt-6">
+            <PrepList
+              title="🧊 Cool-down"
+              hint="Easy stretching while you're still warm. Won't make you stronger, but it helps you turn up tomorrow feeling less stiff."
+              items={day.cooldown}
+              slugPrefix="cooldown"
+              isChecked={isPrepChecked}
+              onToggle={handleToggleDone}
+            />
           </div>
         </>
       )}
