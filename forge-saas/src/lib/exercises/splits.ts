@@ -23,7 +23,7 @@ const PULL_MUSCLES: MuscleKey[] = ["lats", "traps", "rearDelts", "biceps", "fore
 const LEG_MUSCLES: MuscleKey[] = ["quads", "hamstrings", "glutes", "calves"];
 const CORE_MUSCLES: MuscleKey[] = ["abs", "obliques", "lowerBack"];
 
-type Category = "push" | "pull" | "legs" | "core";
+export type Category = "push" | "pull" | "legs" | "core";
 
 interface PooledExercise {
   exercise: ExerciseTemplate;
@@ -33,7 +33,7 @@ interface PooledExercise {
   order: number;
 }
 
-function categorise(primary: MuscleKey[]): Category {
+export function categorise(primary: MuscleKey[]): Category {
   if (primary.some((m) => CORE_MUSCLES.includes(m))) return "core";
   if (primary.some((m) => LEG_MUSCLES.includes(m))) return "legs";
   if (primary.some((m) => PULL_MUSCLES.includes(m))) return "pull";

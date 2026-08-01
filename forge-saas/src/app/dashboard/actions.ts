@@ -2,8 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { estimated1RM, updateStreak, type StreakState } from "@/lib/tracking";
+import { libraryFor, prescribeExercise } from "@/lib/exercises/generator";
+import { findAlternatives, rankAlternatives } from "@/lib/exercises/alternatives";
+import type { MatchQuality } from "@/lib/exercises/alternatives";
+import type { GeneratedProgram, UserProfile } from "@/lib/exercises/types";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -161,6 +166,130 @@ export async function getStreak(): Promise<StreakState> {
     lastWorkoutDate: data?.last_workout_date ?? null,
     totalWorkouts: data?.total_workouts ?? 0,
   };
+}
+
+export interface AlternativeOption {
+  slug: string;
+  name: string;
+  equip: string;
+  primary: string[];
+  difficulty: string;
+  /** How closely this replaces the original, so the UI can say so plainly
+   *  instead of implying every option is equivalent. */
+  match: MatchQuality;
+}
+
+/** The user's profile in the shape the exercise generator expects. */
+async function loadUserProfile(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<UserProfile | null> {
+  const { data } = await supabase
+    .from("profiles")
+    .select(
+      "age, sex, height_cm, weight_kg, goal, experience, training_location, has_dumbbells_at_home, days_per_week",
+    )
+    .eq("id", userId)
+    .single();
+  if (!data) return null;
+  return {
+    age: data.age,
+    sex: data.sex,
+    heightCm: data.height_cm,
+    weightKg: data.weight_kg,
+    goal: data.goal,
+    experience: data.experience,
+    trainingLocation: data.training_location ?? "gym",
+    hasDumbbellsAtHome: data.has_dumbbells_at_home ?? true,
+    daysPerWeek: data.days_per_week ?? 6,
+  };
+}
+
+/** Replacements offered for one exercise on one day. Computed server-side so the
+ *  whole exercise library doesn't have to ship to the browser. */
+export async function getAlternatives(
+  dayNumber: number,
+  exerciseSlug: string,
+): Promise<{ options: AlternativeOption[]; error: string | null }> {
+  const { supabase, userId } = await requireUser();
+
+  const profile = await loadUserProfile(supabase, userId);
+  if (!profile) return { options: [], error: "Couldn't load your profile." };
+
+  const { data: programRow } = await supabase
+    .from("programs")
+    .select("program")
+    .eq("user_id", userId)
+    .single();
+  if (!programRow) return { options: [], error: "Couldn't load your program." };
+
+  const program = programRow.program as GeneratedProgram;
+  const day = program.days.find((d) => d.dayNumber === dayNumber);
+  const current = day?.exercises.find((e) => e.slug === exerciseSlug);
+  if (!day || !current) return { options: [], error: "That exercise isn't in today's plan." };
+
+  // Exclude whatever is already scheduled today, so a swap can't create a duplicate.
+  const alreadyToday = day.exercises.map((e) => e.slug);
+  const options = rankAlternatives(libraryFor(profile), current, alreadyToday).map(
+    ({ exercise, match }) => ({
+      slug: exercise.slug,
+      name: exercise.name,
+      equip: exercise.equip,
+      primary: exercise.primary as string[],
+      difficulty: exercise.difficulty,
+      match,
+    }),
+  );
+
+  return { options, error: null };
+}
+
+/** Swaps one exercise for another in the stored program, re-prescribing sets,
+ *  reps and rest for the slot it lands in. */
+export async function swapExercise(
+  dayNumber: number,
+  currentSlug: string,
+  replacementSlug: string,
+): Promise<{ error: string | null }> {
+  const { supabase, userId } = await requireUser();
+
+  const profile = await loadUserProfile(supabase, userId);
+  if (!profile) return { error: "Couldn't load your profile." };
+
+  const { data: programRow } = await supabase
+    .from("programs")
+    .select("program")
+    .eq("user_id", userId)
+    .single();
+  if (!programRow) return { error: "Couldn't load your program." };
+
+  const program = programRow.program as GeneratedProgram;
+  const day = program.days.find((d) => d.dayNumber === dayNumber);
+  if (!day) return { error: "That day isn't in your plan." };
+
+  const index = day.exercises.findIndex((e) => e.slug === currentSlug);
+  if (index === -1) return { error: "That exercise isn't in today's plan." };
+
+  // Only accept a replacement this user could legitimately have been offered —
+  // never trust a slug straight from the browser.
+  const allowed = findAlternatives(
+    libraryFor(profile),
+    day.exercises[index],
+    day.exercises.map((e) => e.slug),
+  );
+  const replacement = allowed.find((e) => e.slug === replacementSlug);
+  if (!replacement) return { error: "That replacement isn't available for this exercise." };
+
+  day.exercises[index] = prescribeExercise(replacement, index, profile);
+
+  const { error } = await supabase
+    .from("programs")
+    .update({ program })
+    .eq("user_id", userId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/dashboard");
+  return { error: null };
 }
 
 export interface IntakeResult {

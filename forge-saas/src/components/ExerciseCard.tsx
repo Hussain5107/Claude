@@ -5,6 +5,7 @@ import Image from "next/image";
 import type { PrescribedExercise } from "@/lib/exercises/types";
 import { MUSCLE_LABELS } from "@/lib/exercises/types";
 import type { LoggedSet } from "@/lib/exercises/loggingTypes";
+import type { AlternativeOption } from "@/app/dashboard/actions";
 import { useSpeech } from "@/hooks/useSpeech";
 import {
   exerciseIntroText,
@@ -28,6 +29,8 @@ interface Props {
   onToggleDone: () => void;
   onSaveNote: (note: string) => void;
   onLogSet: (setNumber: number, weightKg: number, reps: number) => Promise<{ isNewPR: boolean }>;
+  onRequestAlternatives: () => Promise<{ options: AlternativeOption[]; error: string | null }>;
+  onSwap: (replacementSlug: string) => Promise<{ error: string | null }>;
 }
 
 export default function ExerciseCard({
@@ -41,8 +44,15 @@ export default function ExerciseCard({
   onToggleDone,
   onSaveNote,
   onLogSet,
+  onRequestAlternatives,
+  onSwap,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const [swapOpen, setSwapOpen] = useState(false);
+  const [swapOptions, setSwapOptions] = useState<AlternativeOption[]>([]);
+  const [swapLoading, setSwapLoading] = useState(false);
+  const [swapError, setSwapError] = useState<string | null>(null);
+  const [swapping, setSwapping] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState(note);
   const [imgError, setImgError] = useState(false);
   const [prFlash, setPrFlash] = useState(false);
@@ -80,6 +90,29 @@ export default function ExerciseCard({
     } else {
       speak(allSetsDoneText(ex.name), { interrupt: false });
     }
+  }
+
+  async function openSwap() {
+    if (swapOpen) {
+      setSwapOpen(false);
+      return;
+    }
+    setSwapOpen(true);
+    setSwapLoading(true);
+    setSwapError(null);
+    const result = await onRequestAlternatives();
+    setSwapLoading(false);
+    if (result.error) setSwapError(result.error);
+    else setSwapOptions(result.options);
+  }
+
+  async function confirmSwap(replacementSlug: string) {
+    setSwapping(replacementSlug);
+    setSwapError(null);
+    const result = await onSwap(replacementSlug);
+    setSwapping(null);
+    if (result.error) setSwapError(result.error);
+    else setSwapOpen(false);
   }
 
   const videoUrl =
@@ -276,10 +309,65 @@ export default function ExerciseCard({
             >
               ▶ {videoVerified ? "Watch demonstration" : "Search proper form"}
             </a>
-            <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border-hi)] bg-[var(--surface-hi)] px-3.5 py-2 text-xs font-bold text-[var(--text-dim)]">
-              🔄 Alternative: {ex.alt}
-            </span>
+            <button
+              type="button"
+              onClick={openSwap}
+              className="inline-flex items-center gap-2 rounded-full border border-[var(--border-hi)] bg-[var(--surface-hi)] px-3.5 py-2 text-xs font-bold hover:border-[var(--cyan)] hover:text-[var(--cyan)]"
+            >
+              🔄 {swapOpen ? "Cancel swap" : "Swap this exercise"}
+            </button>
           </div>
+
+          {swapOpen && (
+            <div className="mt-3 rounded-2xl border border-[var(--border)] bg-[var(--bg-2)] p-3">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-faint)]">
+                Replace with
+              </p>
+              <p className="mt-1 text-xs text-[var(--text-dim)]">
+                Same muscles, equipment you have. Sets and reps carry over.
+              </p>
+
+              {swapLoading && (
+                <p className="mt-3 text-sm text-[var(--text-dim)]">Finding alternatives…</p>
+              )}
+              {swapError && <p className="mt-3 text-sm text-[var(--rose)]">{swapError}</p>}
+              {!swapLoading && !swapError && swapOptions.length === 0 && (
+                <p className="mt-3 text-sm text-[var(--text-dim)]">
+                  No other exercise in your plan trains the same muscles with your equipment.
+                </p>
+              )}
+
+              <div className="mt-3 flex flex-col gap-2">
+                {swapOptions.map((option) => (
+                  <button
+                    key={option.slug}
+                    type="button"
+                    disabled={swapping !== null}
+                    onClick={() => confirmSwap(option.slug)}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-left transition hover:border-[var(--cyan)] disabled:opacity-40"
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold">{option.name}</span>
+                      <span className="block text-[11px] text-[var(--text-faint)]">
+                        {option.equip}
+                        {option.match !== "same-muscle" && (
+                          <span className="text-[var(--amber)]">
+                            {" · "}
+                            {option.match === "related"
+                              ? "trains related muscles"
+                              : "same movement, different muscles"}
+                          </span>
+                        )}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-xs font-bold text-[var(--cyan)]">
+                      {swapping === option.slug ? "Swapping…" : "Use this"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

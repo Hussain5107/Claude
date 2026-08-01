@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import type { GeneratedProgram } from "@/lib/exercises/types";
 import { MUSCLE_LABELS } from "@/lib/exercises/types";
@@ -9,7 +10,14 @@ import type { LoggedSet } from "@/lib/exercises/loggingTypes";
 import ExerciseCard from "./ExerciseCard";
 import NutritionPanel from "./NutritionPanel";
 import { Button } from "./ui";
-import { toggleExerciseDone, saveExerciseNote, logSet, logIntake } from "@/app/dashboard/actions";
+import {
+  toggleExerciseDone,
+  saveExerciseNote,
+  logSet,
+  logIntake,
+  getAlternatives,
+  swapExercise,
+} from "@/app/dashboard/actions";
 import { Logo } from "./Logo";
 import ReviewPrompt from "./ReviewPrompt";
 import InstallAppPrompt from "./InstallAppPrompt";
@@ -67,6 +75,7 @@ export default function DashboardClient({
   waterMl,
   proteinG,
 }: Props) {
+  const router = useRouter();
   const today = new Date();
   const [selectedIndex, setSelectedIndex] = useState(today.getDay());
   // Read frequency off the stored program rather than the profile: it's the plan
@@ -156,6 +165,14 @@ export default function DashboardClient({
       total: prev.total + (result.streak.current !== prev.current ? 1 : 0),
     }));
     return { isNewPR: result.isNewPR };
+  }
+
+  async function handleSwap(currentSlug: string, replacementSlug: string) {
+    const result = await swapExercise(selectedDayNumber ?? 0, currentSlug, replacementSlug);
+    // The program lives on the server, so pull the updated plan back down
+    // rather than trying to patch it locally.
+    if (!result.error) router.refresh();
+    return result;
   }
 
   async function handleLogIntake(waterMlDelta: number, proteinGDelta: number) {
@@ -339,6 +356,8 @@ export default function DashboardClient({
                   onToggleDone={() => handleToggleDone(ex.slug)}
                   onSaveNote={(note) => handleSaveNote(ex.slug, note)}
                   onLogSet={(setNumber, weightKg, reps) => handleLogSet(ex.name, ex.slug, setNumber, weightKg, reps)}
+                  onRequestAlternatives={() => getAlternatives(selectedDayNumber ?? 0, ex.slug)}
+                  onSwap={(replacementSlug) => handleSwap(ex.slug, replacementSlug)}
                 />
               );
             })}

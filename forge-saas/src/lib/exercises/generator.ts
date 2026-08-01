@@ -13,7 +13,7 @@ import type {
 } from "./types";
 
 /** The exercise library the user's equipment gives them access to. */
-function libraryFor(profile: UserProfile): DayTemplate[] {
+export function libraryFor(profile: UserProfile): DayTemplate[] {
   if (profile.trainingLocation === "home") {
     return profile.hasDumbbellsAtHome ? HOME_DUMBBELL_DAY_TEMPLATES : BODYWEIGHT_DAY_TEMPLATES;
   }
@@ -100,7 +100,7 @@ function prescribeRpe(profile: UserProfile): string {
   return "RPE 7–8";
 }
 
-function prescribeExercise(
+export function prescribeExercise(
   ex: ExerciseTemplate,
   index: number,
   profile: UserProfile,
