@@ -9,9 +9,9 @@ import {
   updateAvatarUrl,
   logHealthMetric,
   savePushSubscription,
-  updateTrainingLocation,
+  updateProgramSettings,
 } from "@/app/dashboard/settings/actions";
-import type { TrainingLocation } from "@/lib/exercises/types";
+import type { DaysPerWeek, TrainingLocation } from "@/lib/exercises/types";
 import { subscribeToPush, supportsPush } from "@/lib/pushClient";
 import { Button, Card, Checkbox, Input, Label } from "./ui";
 import { Logo } from "./Logo";
@@ -32,6 +32,7 @@ interface Profile {
   workout_reminder_hour: number;
   training_location: TrainingLocation;
   has_dumbbells_at_home: boolean;
+  days_per_week: DaysPerWeek;
 }
 
 interface HealthMetric {
@@ -42,6 +43,13 @@ interface HealthMetric {
   pulse: number | null;
   notes: string | null;
 }
+
+const DAY_CHOICES: { days: DaysPerWeek; label: string; detail: string }[] = [
+  { days: 3, label: "Full body", detail: "Three full-body sessions, a rest day between each." },
+  { days: 4, label: "Upper / Lower", detail: "Upper and lower body, each trained twice a week." },
+  { days: 5, label: "PPL + U/L", detail: "Push, pull and legs, plus an upper and a lower day." },
+  { days: 6, label: "PPL \u00d72", detail: "Push, pull and legs, each trained twice a week." },
+];
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
@@ -85,19 +93,25 @@ export default function SettingsClient({
 
   const [trainingLocation, setTrainingLocation] = useState<TrainingLocation>(profile.training_location);
   const [hasDumbbellsAtHome, setHasDumbbellsAtHome] = useState(profile.has_dumbbells_at_home);
+  const [daysPerWeek, setDaysPerWeek] = useState<DaysPerWeek>(profile.days_per_week ?? 6);
   const [confirmingLocationChange, setConfirmingLocationChange] = useState(false);
   const [locationSaving, setLocationSaving] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [locationSaved, setLocationSaved] = useState(false);
 
-  const locationChanged =
+  const programChanged =
     trainingLocation !== profile.training_location ||
+    daysPerWeek !== (profile.days_per_week ?? 6) ||
     (trainingLocation === "home" && hasDumbbellsAtHome !== profile.has_dumbbells_at_home);
 
   async function handleConfirmLocationChange() {
     setLocationSaving(true);
     setLocationError(null);
-    const result = await updateTrainingLocation(trainingLocation, trainingLocation === "gym" ? true : hasDumbbellsAtHome);
+    const result = await updateProgramSettings(
+      trainingLocation,
+      trainingLocation === "gym" ? true : hasDumbbellsAtHome,
+      daysPerWeek,
+    );
     setLocationSaving(false);
     setConfirmingLocationChange(false);
     if (result.error) {
@@ -258,7 +272,7 @@ export default function SettingsClient({
       </Card>
 
       <Card className="mt-6 p-6">
-        <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-[var(--text-faint)]">Training Location</h2>
+        <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-[var(--text-faint)]">Your program</h2>
         <div className="grid grid-cols-2 gap-3">
           <LocationButton
             label="🏋️ Gym"
@@ -305,13 +319,42 @@ export default function SettingsClient({
           </div>
         )}
 
-        {locationChanged && !confirmingLocationChange && (
+        <div className="mt-4">
+          <Label>Training days per week</Label>
+          <div className="grid grid-cols-4 gap-2">
+            {DAY_CHOICES.map((choice) => (
+              <button
+                key={choice.days}
+                type="button"
+                onClick={() => {
+                  setDaysPerWeek(choice.days);
+                  setConfirmingLocationChange(false);
+                }}
+                className={`rounded-xl border px-2 py-2.5 text-center transition ${
+                  daysPerWeek === choice.days
+                    ? "border-transparent bg-gradient-to-br from-[var(--violet)] to-[var(--cyan)] text-white"
+                    : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-dim)] hover:border-[var(--border-hi)]"
+                }`}
+              >
+                <span className="block text-base font-extrabold">{choice.days}</span>
+                <span className="block text-[10px] font-semibold leading-tight opacity-80">
+                  {choice.label}
+                </span>
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-xs text-[var(--text-faint)]">
+            {DAY_CHOICES.find((c) => c.days === daysPerWeek)?.detail}
+          </p>
+        </div>
+
+        {programChanged && !confirmingLocationChange && (
           <Button
             variant="primary"
             onClick={() => setConfirmingLocationChange(true)}
             className="mt-4 w-full"
           >
-            Save training location
+            Save & rebuild my plan
           </Button>
         )}
 

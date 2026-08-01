@@ -69,7 +69,11 @@ export default function DashboardClient({
 }: Props) {
   const today = new Date();
   const [selectedIndex, setSelectedIndex] = useState(today.getDay());
-  const selectedDayNumber = weekdayToDayNumber(selectedIndex, dayOffset);
+  // Read frequency off the stored program rather than the profile: it's the plan
+  // actually on screen. Programs generated before days-per-week existed have no
+  // such field, and those are all 6-day plans.
+  const daysPerWeek = program.daysPerWeek ?? 6;
+  const selectedDayNumber = weekdayToDayNumber(selectedIndex, dayOffset, daysPerWeek);
   const [muscleFilter, setMuscleFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
 
@@ -237,7 +241,9 @@ export default function DashboardClient({
 
       <div className="mt-6 grid grid-cols-7 gap-2">
         {DAY_LABELS.map((label, i) => {
-          const d = program.days.find((d) => d.dayNumber === weekdayToDayNumber(i, dayOffset));
+          const d = program.days.find(
+            (d) => d.dayNumber === weekdayToDayNumber(i, dayOffset, daysPerWeek),
+          );
           const isSelected = i === selectedIndex;
           return (
             <button

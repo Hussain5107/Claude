@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { generateProgram } from "@/lib/exercises/generator";
-import type { TrainingLocation } from "@/lib/exercises/types";
+import type { DaysPerWeek, TrainingLocation } from "@/lib/exercises/types";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -54,9 +54,12 @@ export async function updateProfile(input: UpdateProfileInput): Promise<{ error:
   return { error: null };
 }
 
-export async function updateTrainingLocation(
+/** Location, equipment and weekly frequency all change which exercises the plan
+ *  contains, so they share one action and one regeneration rather than three. */
+export async function updateProgramSettings(
   trainingLocation: TrainingLocation,
   hasDumbbellsAtHome: boolean,
+  daysPerWeek: DaysPerWeek,
 ): Promise<{ error: string | null }> {
   const { supabase, userId } = await requireUser();
 
@@ -70,7 +73,11 @@ export async function updateTrainingLocation(
 
   const { error: updateError } = await supabase
     .from("profiles")
-    .update({ training_location: trainingLocation, has_dumbbells_at_home: hasDumbbellsAtHome })
+    .update({
+      training_location: trainingLocation,
+      has_dumbbells_at_home: hasDumbbellsAtHome,
+      days_per_week: daysPerWeek,
+    })
     .eq("id", userId);
 
   if (updateError) return { error: updateError.message };
@@ -84,6 +91,7 @@ export async function updateTrainingLocation(
     experience: profile.experience,
     trainingLocation,
     hasDumbbellsAtHome,
+    daysPerWeek,
   });
 
   const { error: programError } = await supabase

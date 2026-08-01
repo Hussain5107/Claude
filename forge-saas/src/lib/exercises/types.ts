@@ -70,6 +70,7 @@ export type Goal = "muscle" | "strength" | "fat_loss" | "general_fitness";
 export type ExperienceLevel = "beginner" | "intermediate" | "advanced";
 export type Sex = "male" | "female";
 export type TrainingLocation = "gym" | "home";
+export type DaysPerWeek = 3 | 4 | 5 | 6;
 
 export interface UserProfile {
   age: number;
@@ -80,6 +81,7 @@ export interface UserProfile {
   experience: ExperienceLevel;
   trainingLocation: TrainingLocation;
   hasDumbbellsAtHome: boolean;
+  daysPerWeek: DaysPerWeek;
 }
 
 export interface PrescribedExercise extends ExerciseTemplate {
@@ -110,6 +112,9 @@ export interface NutritionTargets {
 export interface GeneratedProgram {
   goal: Goal;
   experience: ExperienceLevel;
+  /** Recorded so the dashboard reads frequency off the plan it's actually
+   *  showing, rather than a profile field that may have changed since. */
+  daysPerWeek: DaysPerWeek;
   days: PrescribedDay[];
   nutrition: NutritionTargets;
   generatedAt: string;

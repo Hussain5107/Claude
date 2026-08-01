@@ -1,6 +1,7 @@
 import { DAY_TEMPLATES } from "./data";
 import { HOME_DUMBBELL_DAY_TEMPLATES } from "./homeDumbbellData";
 import { BODYWEIGHT_DAY_TEMPLATES } from "./bodyweightData";
+import { buildSplit } from "./splits";
 import type {
   DayTemplate,
   ExerciseTemplate,
@@ -11,21 +12,28 @@ import type {
   UserProfile,
 } from "./types";
 
-function templatesFor(profile: UserProfile): DayTemplate[] {
+/** The exercise library the user's equipment gives them access to. */
+function libraryFor(profile: UserProfile): DayTemplate[] {
   if (profile.trainingLocation === "home") {
     return profile.hasDumbbellsAtHome ? HOME_DUMBBELL_DAY_TEMPLATES : BODYWEIGHT_DAY_TEMPLATES;
   }
   return DAY_TEMPLATES;
 }
 
+/** That library arranged into a split at the user's chosen weekly frequency. */
+function templatesFor(profile: UserProfile): DayTemplate[] {
+  return buildSplit(libraryFor(profile), profile.daysPerWeek ?? 6);
+}
+
 /**
- * Personalization strategy: exercise SELECTION stays the same proven 6-day
- * PPL split for every user (a well-designed compound-focused split works
- * across goals) — what changes per-profile is volume, rep ranges, rest,
- * and nutrition targets. This is a deliberate, honest simplification: for
- * beginner/intermediate lifters, "personalization" is legitimately mostly
- * about intensity/volume prescription, not a different exercise list per
- * goal.
+ * Personalization strategy: which exercises you get is driven by your
+ * equipment (gym / dumbbells / bodyweight) and how many days a week you
+ * train — those pick the library and the split. Your goal and experience
+ * then tune volume, rep ranges, rest and nutrition on top of that.
+ *
+ * Deliberately rules-based rather than AI-generated: for beginner and
+ * intermediate lifters, honest personalization really is mostly about
+ * equipment, frequency and intensity prescription.
  */
 
 function parseRepRange(reps: string): [number, number] {
@@ -106,8 +114,12 @@ function prescribeExercise(
   };
 }
 
-function prescribeDay(profile: UserProfile, dayNumber: number): PrescribedDay {
-  const template = templatesFor(profile).find((d) => d.dayNumber === dayNumber);
+function prescribeDay(
+  profile: UserProfile,
+  templates: DayTemplate[],
+  dayNumber: number,
+): PrescribedDay {
+  const template = templates.find((d) => d.dayNumber === dayNumber);
   if (!template) {
     return {
       key: "rest",
@@ -166,10 +178,12 @@ function computeNutrition(profile: UserProfile): NutritionTargets {
 }
 
 export function generateProgram(profile: UserProfile): GeneratedProgram {
-  const days = [1, 2, 3, 4, 5, 6].map((dayNumber) => prescribeDay(profile, dayNumber));
+  const templates = templatesFor(profile);
+  const days = templates.map((t) => prescribeDay(profile, templates, t.dayNumber));
   return {
     goal: profile.goal,
     experience: profile.experience,
+    daysPerWeek: profile.daysPerWeek ?? 6,
     days,
     nutrition: computeNutrition(profile),
     generatedAt: new Date().toISOString(),

@@ -7,10 +7,18 @@ import { Logo } from "@/components/Logo";
 
 const initialState: OnboardingState = {};
 
+const DAY_CHOICES = [
+  { days: 3, label: "Full body", detail: "Three full-body sessions, a rest day between each." },
+  { days: 4, label: "Upper / Lower", detail: "Upper and lower body, each trained twice a week." },
+  { days: 5, label: "PPL + U/L", detail: "Push, pull and legs, plus an upper and a lower day." },
+  { days: 6, label: "PPL ×2", detail: "Push, pull and legs, each trained twice a week." },
+];
+
 export default function OnboardingPage() {
   const [state, formAction, pending] = useActionState(submitOnboarding, initialState);
   const [trainingLocation, setTrainingLocation] = useState<"gym" | "home">("gym");
   const [hasDumbbells, setHasDumbbells] = useState<"yes" | "no">("yes");
+  const [daysPerWeek, setDaysPerWeek] = useState(6);
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-lg flex-col justify-center px-6 py-12">
@@ -20,7 +28,7 @@ export default function OnboardingPage() {
         </div>
         <h1 className="text-2xl font-extrabold">Let&apos;s build your program</h1>
         <p className="mt-1 text-sm text-[var(--text-dim)]">
-          A few quick questions, then your personalized 6-day plan is ready.
+          A few quick questions, then your personalized plan is ready.
         </p>
       </div>
 
@@ -113,6 +121,33 @@ export default function OnboardingPage() {
             </div>
           )}
 
+          <div>
+            <Label>How many days a week can you train?</Label>
+            <input type="hidden" name="daysPerWeek" value={daysPerWeek} />
+            <div className="grid grid-cols-4 gap-2">
+              {DAY_CHOICES.map((c) => (
+                <button
+                  key={c.days}
+                  type="button"
+                  onClick={() => setDaysPerWeek(c.days)}
+                  className={`rounded-xl border px-2 py-2.5 text-center transition ${
+                    daysPerWeek === c.days
+                      ? "border-transparent bg-gradient-to-br from-[var(--violet)] to-[var(--cyan)] text-white"
+                      : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-dim)] hover:border-[var(--border-hi)]"
+                  }`}
+                >
+                  <span className="block text-base font-extrabold">{c.days}</span>
+                  <span className="block text-[10px] font-semibold leading-tight opacity-80">
+                    {c.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <p className="mt-1.5 text-xs text-[var(--text-faint)]">
+              {DAY_CHOICES.find((c) => c.days === daysPerWeek)?.detail}
+            </p>
+          </div>
+
           <ErrorText>{state?.error}</ErrorText>
 
           <Button type="submit" variant="primary" disabled={pending} className="mt-2 w-full">
@@ -122,8 +157,8 @@ export default function OnboardingPage() {
       </Card>
 
       <p className="mt-5 text-center text-xs text-[var(--text-faint)]">
-        Exercise selection uses a proven 6-day Push/Pull/Legs split for everyone; your answers
-        personalize sets, reps, rest, and nutrition targets on top of it.
+        Your equipment and training days decide which exercises you get; your goal and experience
+        tune the sets, reps, rest and nutrition targets on top of that.
       </p>
     </main>
   );

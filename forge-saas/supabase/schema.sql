@@ -372,3 +372,11 @@ create policy "daily_intake: update own" on public.daily_intake
   for update using (auth.uid() = user_id);
 
 create index if not exists daily_intake_user_date_idx on public.daily_intake (user_id, log_date);
+
+-- 14. TRAINING FREQUENCY -------------------------------------------------------
+-- How many days a week the user wants to train. Drives which split the program
+-- generator builds: 3 = full body, 4 = upper/lower, 5 = PPL + upper/lower,
+-- 6 = the original Push/Pull/Legs ×2. Defaults to 6 so existing users keep the
+-- exact plan they already have.
+
+alter table public.profiles add column if not exists days_per_week int not null default 6 check (days_per_week between 3 and 6);

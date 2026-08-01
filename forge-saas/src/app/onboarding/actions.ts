@@ -3,7 +3,13 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { generateProgram } from "@/lib/exercises/generator";
-import type { ExperienceLevel, Goal, Sex, TrainingLocation } from "@/lib/exercises/types";
+import type {
+  DaysPerWeek,
+  ExperienceLevel,
+  Goal,
+  Sex,
+  TrainingLocation,
+} from "@/lib/exercises/types";
 import { deriveDayOffset } from "@/lib/dayRotation";
 
 export interface OnboardingState {
@@ -31,6 +37,7 @@ export async function submitOnboarding(
   const experience = formData.get("experience") as ExperienceLevel;
   const trainingLocation = (formData.get("trainingLocation") as string) || "gym";
   const hasDumbbells = (formData.get("hasDumbbells") as string) || "yes";
+  const daysPerWeek = Number(formData.get("daysPerWeek")) || 6;
 
   if (
     !age || age < 13 || age > 100 ||
@@ -39,7 +46,8 @@ export async function submitOnboarding(
     !weightKg || weightKg < 30 || weightKg > 300 ||
     !["muscle", "strength", "fat_loss", "general_fitness"].includes(goal) ||
     !["beginner", "intermediate", "advanced"].includes(experience) ||
-    !["gym", "home"].includes(trainingLocation)
+    !["gym", "home"].includes(trainingLocation) ||
+    ![3, 4, 5, 6].includes(daysPerWeek)
   ) {
     return { error: "Please fill in every field with a valid value." };
   }
@@ -54,6 +62,7 @@ export async function submitOnboarding(
     experience,
     trainingLocation: trainingLocation as TrainingLocation,
     hasDumbbellsAtHome,
+    daysPerWeek: daysPerWeek as DaysPerWeek,
   };
 
   const { error: profileError } = await supabase
@@ -68,6 +77,7 @@ export async function submitOnboarding(
       day_offset: deriveDayOffset(user.id),
       training_location: trainingLocation,
       has_dumbbells_at_home: hasDumbbellsAtHome,
+      days_per_week: daysPerWeek,
       onboarded: true,
     })
     .eq("id", user.id);
