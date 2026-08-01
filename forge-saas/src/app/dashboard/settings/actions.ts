@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { generateProgram } from "@/lib/exercises/generator";
 import type { DaysPerWeek, TrainingLocation } from "@/lib/exercises/types";
+import { THEME_NAMES, type ThemeName } from "@/lib/theme";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -111,6 +112,17 @@ export async function updateAvatarUrl(url: string): Promise<{ error: string | nu
   if (error) return { error: error.message };
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard");
+  return { error: null };
+}
+
+export async function updateTheme(theme: ThemeName): Promise<{ error: string | null }> {
+  if (!THEME_NAMES.includes(theme)) return { error: "Unknown theme." };
+  const { supabase, userId } = await requireUser();
+  const { error } = await supabase.from("profiles").update({ theme }).eq("id", userId);
+  if (error) return { error: error.message };
+  // The theme is applied by the signed-in layout, so every screen under it has
+  // to be re-rendered for the new colours to take.
+  revalidatePath("/dashboard", "layout");
   return { error: null };
 }
 

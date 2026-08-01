@@ -84,7 +84,7 @@ function LoginForm() {
 
       <p className="mt-5 text-center text-sm text-[var(--text-dim)]">
         Don&apos;t have an account?{" "}
-        <Link href="/signup" className="text-[var(--cyan)]">
+        <Link href="/signup" className="text-[var(--secondary)]">
           Sign up
         </Link>
       </p>

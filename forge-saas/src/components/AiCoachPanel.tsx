@@ -148,7 +148,7 @@ export default function AiCoachPanel() {
           onChange={(e) => setPasted(e.target.value)}
           rows={5}
           placeholder="Paste the whole reply here — anything it suggests that fits your equipment will show up below."
-          className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-2)] p-3 text-sm outline-none focus:border-[var(--cyan)]"
+          className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-2)] p-3 text-sm outline-none focus:border-[var(--secondary)]"
         />
         <Button
           onClick={handleCheck}

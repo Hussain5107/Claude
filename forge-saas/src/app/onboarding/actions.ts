@@ -11,6 +11,7 @@ import type {
   TrainingLocation,
 } from "@/lib/exercises/types";
 import { deriveDayOffset } from "@/lib/dayRotation";
+import { THEME_NAMES, suggestedTheme, type ThemeName } from "@/lib/theme";
 
 export interface OnboardingState {
   error?: string;
@@ -38,6 +39,7 @@ export async function submitOnboarding(
   const trainingLocation = (formData.get("trainingLocation") as string) || "gym";
   const hasDumbbells = (formData.get("hasDumbbells") as string) || "yes";
   const daysPerWeek = Number(formData.get("daysPerWeek")) || 6;
+  const themeInput = formData.get("theme") as ThemeName | null;
 
   if (
     !age || age < 13 || age > 100 ||
@@ -51,6 +53,10 @@ export async function submitOnboarding(
   ) {
     return { error: "Please fill in every field with a valid value." };
   }
+
+  // Falls back to the theme the sex implies, so a form submitted without the
+  // field (old cached page, JS disabled) still lands somewhere sensible.
+  const theme = themeInput && THEME_NAMES.includes(themeInput) ? themeInput : suggestedTheme(sex);
 
   const hasDumbbellsAtHome = trainingLocation === "gym" ? true : hasDumbbells === "yes";
   const profile = {
@@ -78,6 +84,7 @@ export async function submitOnboarding(
       training_location: trainingLocation,
       has_dumbbells_at_home: hasDumbbellsAtHome,
       days_per_week: daysPerWeek,
+      theme,
       onboarded: true,
     })
     .eq("id", user.id);

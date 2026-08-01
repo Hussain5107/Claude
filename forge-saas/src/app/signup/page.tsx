@@ -109,7 +109,7 @@ export default function SignupPage() {
 
       <p className="mt-5 text-center text-sm text-[var(--text-dim)]">
         Already have an account?{" "}
-        <Link href="/login" className="text-[var(--cyan)]">
+        <Link href="/login" className="text-[var(--secondary)]">
           Log in
         </Link>
       </p>

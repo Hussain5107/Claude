@@ -218,7 +218,7 @@ export default function ExerciseCard({
           </div>
 
           {restRemaining !== null && (
-            <div className="mt-4 flex items-center justify-between rounded-xl border border-[var(--cyan)]/40 bg-[var(--cyan)]/10 px-4 py-2.5 text-sm font-bold text-[var(--cyan)]">
+            <div className="mt-4 flex items-center justify-between rounded-xl border border-[var(--secondary)]/40 bg-[var(--secondary)]/10 px-4 py-2.5 text-sm font-bold text-[var(--secondary)]">
               <span>😮‍💨 Rest</span>
               <span className="font-mono text-lg">{restRemaining}s</span>
             </div>
@@ -294,7 +294,7 @@ export default function ExerciseCard({
               📝 Notes
             </label>
             <textarea
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-2)] p-2.5 text-sm text-[var(--text)] outline-none focus:border-[var(--cyan)]"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-2)] p-2.5 text-sm text-[var(--text)] outline-none focus:border-[var(--secondary)]"
               rows={2}
               placeholder="How did this feel? Any adjustments?"
               value={noteDraft}
@@ -310,14 +310,14 @@ export default function ExerciseCard({
               href={videoUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-full border border-[var(--border-hi)] bg-[var(--surface-hi)] px-3.5 py-2 text-xs font-bold hover:border-[var(--cyan)] hover:text-[var(--cyan)]"
+              className="inline-flex items-center gap-2 rounded-full border border-[var(--border-hi)] bg-[var(--surface-hi)] px-3.5 py-2 text-xs font-bold hover:border-[var(--secondary)] hover:text-[var(--secondary)]"
             >
               ▶ {videoVerified ? "Watch demonstration" : "Search proper form"}
             </a>
             <button
               type="button"
               onClick={openSwap}
-              className="inline-flex items-center gap-2 rounded-full border border-[var(--border-hi)] bg-[var(--surface-hi)] px-3.5 py-2 text-xs font-bold hover:border-[var(--cyan)] hover:text-[var(--cyan)]"
+              className="inline-flex items-center gap-2 rounded-full border border-[var(--border-hi)] bg-[var(--surface-hi)] px-3.5 py-2 text-xs font-bold hover:border-[var(--secondary)] hover:text-[var(--secondary)]"
             >
               🔄 {swapOpen ? "Cancel swap" : "Swap this exercise"}
             </button>
@@ -349,7 +349,7 @@ export default function ExerciseCard({
                     type="button"
                     disabled={swapping !== null}
                     onClick={() => confirmSwap(option.slug)}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-left transition hover:border-[var(--cyan)] disabled:opacity-40"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-left transition hover:border-[var(--secondary)] disabled:opacity-40"
                   >
                     <span className="min-w-0">
                       <span className="block text-sm font-bold">{option.name}</span>
@@ -365,7 +365,7 @@ export default function ExerciseCard({
                         )}
                       </span>
                     </span>
-                    <span className="shrink-0 text-xs font-bold text-[var(--cyan)]">
+                    <span className="shrink-0 text-xs font-bold text-[var(--secondary)]">
                       {swapping === option.slug ? "Swapping…" : "Use this"}
                     </span>
                   </button>
@@ -469,7 +469,7 @@ function SetLogger({
                 placeholder="kg"
                 value={draft.weight}
                 onChange={(e) => setDrafts((d) => ({ ...d, [setNumber]: { ...draft, weight: e.target.value } }))}
-                className="w-20 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-sm outline-none focus:border-[var(--cyan)]"
+                className="w-20 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-sm outline-none focus:border-[var(--secondary)]"
               />
               <span className="text-xs text-[var(--text-faint)]">kg ×</span>
               <input
@@ -478,7 +478,7 @@ function SetLogger({
                 placeholder="reps"
                 value={draft.reps}
                 onChange={(e) => setDrafts((d) => ({ ...d, [setNumber]: { ...draft, reps: e.target.value } }))}
-                className="w-16 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-sm outline-none focus:border-[var(--cyan)]"
+                className="w-16 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-sm outline-none focus:border-[var(--secondary)]"
               />
               <span className="text-xs text-[var(--text-faint)]">reps</span>
               {voiceEnabled && supportsListening && (
@@ -490,7 +490,7 @@ function SetLogger({
                   className={`rounded-full border px-2 py-1.5 text-xs font-bold transition disabled:opacity-40 ${
                     listening === setNumber
                       ? "animate-pulse border-[var(--rose)] text-[var(--rose)]"
-                      : "border-[var(--border-hi)] text-[var(--text-dim)] hover:border-[var(--cyan)] hover:text-[var(--cyan)]"
+                      : "border-[var(--border-hi)] text-[var(--text-dim)] hover:border-[var(--secondary)] hover:text-[var(--secondary)]"
                   }`}
                 >
                   {listening === setNumber ? "🎙️ Listening…" : "🎙️"}
@@ -504,7 +504,7 @@ function SetLogger({
                   await onLogSet(setNumber, parseFloat(draft.weight), parseInt(draft.reps, 10));
                   setPending(null);
                 }}
-                className="ml-auto rounded-full bg-gradient-to-br from-[var(--violet)] to-[var(--cyan)] px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40"
+                className="ml-auto rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--secondary)] px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40"
               >
                 {pending === setNumber ? "…" : "Log"}
               </button>

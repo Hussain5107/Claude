@@ -100,7 +100,7 @@ export default function ReviewPrompt({
               onChange={(e) => setComment(e.target.value)}
               placeholder="Anything you'd change? (optional)"
               rows={3}
-              className="mt-4 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-2)] p-2.5 text-sm outline-none focus:border-[var(--cyan)]"
+              className="mt-4 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-2)] p-2.5 text-sm outline-none focus:border-[var(--secondary)]"
             />
 
             <div className="mt-4 flex gap-2">

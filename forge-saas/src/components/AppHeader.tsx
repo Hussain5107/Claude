@@ -18,7 +18,7 @@ interface Props {
 export default function AppHeader({ title, subtitle, avatarUrl, right }: Props) {
   return (
     <header
-      className="sticky top-0 z-30 -mx-4 mb-5 border-b border-[var(--border)] bg-[rgba(10,11,15,0.82)] px-4 backdrop-blur-xl sm:-mx-6 sm:px-6"
+      className="sticky top-0 z-30 -mx-4 mb-5 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--bg)_85%,transparent)] px-4 backdrop-blur-xl sm:-mx-6 sm:px-6"
       style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top))" }}
     >
       <div className="flex items-center justify-between gap-3 pb-3">

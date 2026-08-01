@@ -167,7 +167,7 @@ export default function HomeClient({
       <ReviewPrompt accountCreatedAt={accountCreatedAt} alreadyReviewed={alreadyReviewed} />
 
       {isBirthdayToday(dateOfBirth) && (
-        <div className="mb-4 rounded-[22px] border border-[rgba(255,176,32,0.4)] bg-gradient-to-br from-[rgba(255,176,32,0.15)] to-[rgba(139,92,246,0.15)] p-5 text-center">
+        <div className="mb-4 rounded-[22px] border border-[rgba(255,176,32,0.4)] bg-gradient-to-br from-[rgba(255,176,32,0.15)] to-[rgb(var(--primary-rgb)/0.15)] p-5 text-center">
           <div className="text-3xl">🎂</div>
           <h2 className="mt-1 text-lg font-extrabold">Happy Birthday!</h2>
           <p className="mt-1 text-sm text-[var(--text-dim)]">
@@ -180,12 +180,12 @@ export default function HomeClient({
       {today ? (
         <Link
           href="/dashboard/workouts"
-          className="block rounded-[22px] bg-gradient-to-br from-[var(--violet)] to-[var(--cyan)] p-[1.5px] shadow-[0_16px_40px_rgba(139,92,246,0.28)] transition active:scale-[0.99]"
+          className="block rounded-[22px] bg-gradient-to-br from-[var(--primary)] to-[var(--secondary)] p-[1.5px] shadow-[0_16px_40px_rgb(var(--primary-rgb)/0.28)] transition active:scale-[0.99]"
         >
-          <div className="rounded-[21px] bg-[rgba(12,13,20,0.86)] p-5">
+          <div className="rounded-[21px] bg-[color-mix(in_srgb,var(--bg-2)_92%,transparent)] p-5">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--cyan)]">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--secondary)]">
                   Today&apos;s plan
                 </p>
                 <h2 className="mt-1 truncate text-2xl font-extrabold">{today.name}</h2>
@@ -196,7 +196,7 @@ export default function HomeClient({
 
             <div className="mt-4 h-2 overflow-hidden rounded-full bg-[rgba(255,255,255,0.09)]">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-[var(--violet)] to-[var(--cyan)] transition-all"
+                className="h-full rounded-full bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] transition-all"
                 style={{ width: `${(today.completed / today.total) * 100}%` }}
               />
             </div>
@@ -205,7 +205,7 @@ export default function HomeClient({
               <span className="font-mono text-xs font-bold text-[var(--text-dim)]">
                 {today.completed} of {today.total} exercises
               </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-[var(--violet)] to-[var(--cyan)] px-4 py-2 text-xs font-bold text-white">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--secondary)] px-4 py-2 text-xs font-bold text-white">
                 {today.completed === 0
                   ? "Start workout"
                   : today.completed >= today.total
@@ -226,7 +226,7 @@ export default function HomeClient({
           </p>
           <Link
             href="/dashboard/workouts"
-            className="mt-3 inline-block text-xs font-bold text-[var(--cyan)]"
+            className="mt-3 inline-block text-xs font-bold text-[var(--secondary)]"
           >
             See the week →
           </Link>
@@ -239,14 +239,14 @@ export default function HomeClient({
           <Ring
             value={today ? today.completed : 0}
             max={today ? today.total : 1}
-            color="var(--violet)"
+            color="var(--primary)"
             label="Session"
             display={today ? `${today.completed}/${today.total}` : "Rest"}
           />
           <Ring
             value={water}
             max={targetWaterMl}
-            color="var(--cyan)"
+            color="var(--secondary)"
             label="Water"
             display={`${(water / 1000).toFixed(1)}L`}
           />
@@ -281,7 +281,7 @@ export default function HomeClient({
             placeholder="Protein (g)"
             value={proteinInput}
             onChange={(e) => setProteinInput(e.target.value)}
-            className="w-0 flex-1 rounded-full border border-[var(--border)] bg-[var(--bg-2)] px-4 py-2 text-xs outline-none focus:border-[var(--cyan)]"
+            className="w-0 flex-1 rounded-full border border-[var(--border)] bg-[var(--bg-2)] px-4 py-2 text-xs outline-none focus:border-[var(--secondary)]"
           />
           <button
             type="button"
@@ -320,8 +320,8 @@ export default function HomeClient({
                     count === 0
                       ? "bg-[var(--border)]"
                       : i === todayIndex
-                        ? "bg-gradient-to-t from-[var(--violet)] to-[var(--cyan)]"
-                        : "bg-[rgba(139,92,246,0.55)]"
+                        ? "bg-gradient-to-t from-[var(--primary)] to-[var(--secondary)]"
+                        : "bg-[rgb(var(--primary-rgb)/0.55)]"
                   }`}
                   style={{ height: count === 0 ? "3px" : `${(count / maxSets) * 100}%` }}
                   title={`${count} set${count === 1 ? "" : "s"}`}
@@ -329,7 +329,7 @@ export default function HomeClient({
               </div>
               <span
                 className={`text-[10px] font-bold ${
-                  i === todayIndex ? "text-[var(--cyan)]" : "text-[var(--text-faint)]"
+                  i === todayIndex ? "text-[var(--secondary)]" : "text-[var(--text-faint)]"
                 }`}
               >
                 {DAY_LABELS[i]}
@@ -342,8 +342,8 @@ export default function HomeClient({
       {/* Streak + profile numbers. */}
       <section className="mt-4 grid grid-cols-3 gap-2">
         <Tile label="Streak" value={`${streak.current}d`} accent="var(--amber)" />
-        <Tile label="Best" value={`${streak.longest}d`} accent="var(--cyan)" />
-        <Tile label="Workouts" value={`${streak.total}`} accent="var(--violet)" />
+        <Tile label="Best" value={`${streak.longest}d`} accent="var(--secondary)" />
+        <Tile label="Workouts" value={`${streak.total}`} accent="var(--primary)" />
       </section>
 
       <section className="mt-2 grid grid-cols-3 gap-2">

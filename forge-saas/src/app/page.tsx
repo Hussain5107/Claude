@@ -74,13 +74,13 @@ export default function LandingPage() {
         {/* Hero */}
         <section className="grid grid-cols-1 items-center gap-10 py-16 lg:grid-cols-2 lg:py-24">
           <div className="text-center lg:text-left">
-            <div className="mb-3 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[var(--cyan)]">
+            <div className="mb-3 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[var(--secondary)]">
               <span className="h-1.5 w-1.5 rounded-full bg-[var(--volt)]" />
               Free during beta
             </div>
             <h1 className="mx-auto max-w-2xl text-4xl font-extrabold leading-tight sm:text-5xl lg:mx-0 lg:text-6xl">
               Your personalized{" "}
-              <span className="bg-gradient-to-br from-[var(--violet)] to-[var(--cyan)] bg-clip-text text-transparent">
+              <span className="bg-gradient-to-br from-[var(--primary)] to-[var(--secondary)] bg-clip-text text-transparent">
                 6-day program
               </span>
               , built in a minute.
@@ -201,7 +201,7 @@ export default function LandingPage() {
               <Reveal key={s.n} delay={i * 70}>
                 <div className="flex gap-5">
                   <div className="flex flex-col items-center">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--violet)] to-[var(--cyan)] font-mono text-sm font-bold text-white">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--secondary)] font-mono text-sm font-bold text-white">
                       {s.n}
                     </span>
                     {i < STEPS.length - 1 && <span className="mt-1 h-full w-px flex-1 bg-[var(--border)]" />}

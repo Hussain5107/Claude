@@ -181,7 +181,7 @@ export default function DashboardClient({
               title={voiceEnabled ? "Voice coach on" : "Voice coach off"}
               className={`rounded-full border px-2.5 py-1 text-xs font-bold transition ${
                 voiceEnabled
-                  ? "border-[var(--cyan)] text-[var(--cyan)]"
+                  ? "border-[var(--secondary)] text-[var(--secondary)]"
                   : "border-[var(--border)] text-[var(--text-faint)]"
               }`}
             >
@@ -215,7 +215,7 @@ export default function DashboardClient({
               aria-label={`${FULL_DAY_LABELS[i]} — ${d ? d.name : "Rest"}`}
               className={`flex flex-col items-center gap-1.5 rounded-2xl py-2.5 transition active:scale-95 ${
                 isSelected
-                  ? "bg-gradient-to-br from-[var(--violet)] to-[var(--cyan)] text-white shadow-[0_8px_20px_rgba(139,92,246,0.3)]"
+                  ? "bg-gradient-to-br from-[var(--primary)] to-[var(--secondary)] text-white shadow-[0_8px_20px_rgb(var(--primary-rgb)/0.3)]"
                   : "border border-[var(--border)] bg-[var(--surface)]"
               }`}
             >
@@ -224,7 +224,7 @@ export default function DashboardClient({
                   isSelected
                     ? "text-white"
                     : isToday
-                      ? "text-[var(--cyan)]"
+                      ? "text-[var(--secondary)]"
                       : "text-[var(--text-dim)]"
                 }`}
               >
@@ -235,7 +235,7 @@ export default function DashboardClient({
                   d
                     ? isSelected
                       ? "bg-white"
-                      : "bg-[var(--violet)]"
+                      : "bg-[var(--primary)]"
                     : isSelected
                       ? "bg-white/35"
                       : "bg-[var(--border-hi)]"
@@ -272,7 +272,7 @@ export default function DashboardClient({
             </div>
             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--border)]">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-[var(--violet)] to-[var(--cyan)] transition-all"
+                className="h-full rounded-full bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] transition-all"
                 style={{ width: `${(completedCount / day.exercises.length) * 100}%` }}
               />
             </div>
@@ -361,7 +361,7 @@ function FilterChip({
       onClick={onClick}
       className={`rounded-full px-3.5 py-2 text-xs font-semibold transition ${
         active
-          ? "bg-gradient-to-br from-[var(--violet)] to-[var(--cyan)] text-white"
+          ? "bg-gradient-to-br from-[var(--primary)] to-[var(--secondary)] text-white"
           : "glass border border-[var(--border)] text-[var(--text-dim)] hover:border-[var(--border-hi)]"
       }`}
     >

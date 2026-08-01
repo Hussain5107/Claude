@@ -4,6 +4,8 @@ import { useActionState, useState } from "react";
 import { submitOnboarding, type OnboardingState } from "./actions";
 import { Button, Card, ErrorText, Input, Label, Select } from "@/components/ui";
 import { Logo } from "@/components/Logo";
+import ThemePicker from "@/components/ThemePicker";
+import { suggestedTheme, type ThemeName } from "@/lib/theme";
 
 const initialState: OnboardingState = {};
 
@@ -19,6 +21,21 @@ export default function OnboardingPage() {
   const [trainingLocation, setTrainingLocation] = useState<"gym" | "home">("gym");
   const [hasDumbbells, setHasDumbbells] = useState<"yes" | "no">("yes");
   const [daysPerWeek, setDaysPerWeek] = useState(6);
+
+  // The theme follows the sex answer until the user picks one themselves —
+  // then it stops following, so their choice isn't overwritten if they go back
+  // and change the dropdown.
+  const [theme, setTheme] = useState<ThemeName>("forge");
+  const [themePicked, setThemePicked] = useState(false);
+
+  function handleSexChange(sex: string) {
+    if (!themePicked) setTheme(suggestedTheme(sex));
+  }
+
+  function handleThemeChange(next: ThemeName) {
+    setThemePicked(true);
+    setTheme(next);
+  }
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-lg flex-col justify-center px-6 py-12">
@@ -41,7 +58,13 @@ export default function OnboardingPage() {
             </div>
             <div>
               <Label htmlFor="sex">Sex</Label>
-              <Select id="sex" name="sex" required defaultValue="">
+              <Select
+                id="sex"
+                name="sex"
+                required
+                defaultValue=""
+                onChange={(e) => handleSexChange(e.target.value)}
+              >
                 <option value="" disabled>
                   Select…
                 </option>
@@ -132,7 +155,7 @@ export default function OnboardingPage() {
                   onClick={() => setDaysPerWeek(c.days)}
                   className={`rounded-xl border px-2 py-2.5 text-center transition ${
                     daysPerWeek === c.days
-                      ? "border-transparent bg-gradient-to-br from-[var(--violet)] to-[var(--cyan)] text-white"
+                      ? "border-transparent bg-gradient-to-br from-[var(--primary)] to-[var(--secondary)] text-white"
                       : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-dim)] hover:border-[var(--border-hi)]"
                   }`}
                 >
@@ -145,6 +168,16 @@ export default function OnboardingPage() {
             </div>
             <p className="mt-1.5 text-xs text-[var(--text-faint)]">
               {DAY_CHOICES.find((c) => c.days === daysPerWeek)?.detail}
+            </p>
+          </div>
+
+          <div>
+            <Label>Your look</Label>
+            <input type="hidden" name="theme" value={theme} />
+            <ThemePicker value={theme} onChange={handleThemeChange} />
+            <p className="mt-1.5 text-xs text-[var(--text-faint)]">
+              Colours only — your program and your numbers are the same whichever you pick. You can
+              change it any time from Settings.
             </p>
           </div>
 
@@ -179,7 +212,7 @@ function LocationOption({
       onClick={onClick}
       className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${
         active
-          ? "border-transparent bg-gradient-to-br from-[var(--violet)] to-[var(--cyan)] text-white"
+          ? "border-transparent bg-gradient-to-br from-[var(--primary)] to-[var(--secondary)] text-white"
           : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-dim)] hover:border-[var(--border-hi)]"
       }`}
     >

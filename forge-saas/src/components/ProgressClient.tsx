@@ -124,7 +124,7 @@ export default function ProgressClient({ sets, personalRecords, streak, userId, 
       <div className="grid grid-cols-3 gap-2">
         <StatTile label="Current streak" value={`${streak.current}d`} accent="var(--amber)" />
         <StatTile label="Longest streak" value={`${streak.longest}d`} accent="var(--volt)" />
-        <StatTile label="Workouts logged" value={String(streak.total)} accent="var(--cyan)" />
+        <StatTile label="Workouts logged" value={String(streak.total)} accent="var(--secondary)" />
       </div>
 
       {sets.length === 0 ? (
@@ -206,7 +206,7 @@ export default function ProgressClient({ sets, personalRecords, streak, userId, 
             <Input placeholder="e.g. Month 2" value={photoNote} onChange={(e) => setPhotoNote(e.target.value)} />
           </div>
           <label className="cursor-pointer">
-            <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border-hi)] bg-[var(--surface-hi)] px-4 py-2.5 text-xs font-bold hover:border-[var(--cyan)]">
+            <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border-hi)] bg-[var(--surface-hi)] px-4 py-2.5 text-xs font-bold hover:border-[var(--secondary)]">
               {uploadingPhoto ? "Uploading…" : "📷 Add photo"}
             </span>
             <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={uploadingPhoto} />
@@ -288,14 +288,14 @@ function LineChart({ points, labels }: { points: number[]; labels: string[] }) {
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full" role="img" aria-label="Estimated 1RM progress chart">
       <defs>
         <linearGradient id="progress-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--cyan)" stopOpacity="0.3" />
-          <stop offset="100%" stopColor="var(--cyan)" stopOpacity="0" />
+          <stop offset="0%" stopColor="var(--secondary)" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="var(--secondary)" stopOpacity="0" />
         </linearGradient>
       </defs>
       <path d={areaPath} fill="url(#progress-fill)" />
-      <path d={path} fill="none" stroke="var(--cyan)" strokeWidth="2.5" />
+      <path d={path} fill="none" stroke="var(--secondary)" strokeWidth="2.5" />
       {coords.map((c, i) => (
-        <circle key={i} cx={c.x} cy={c.y} r="3" fill="var(--cyan)" />
+        <circle key={i} cx={c.x} cy={c.y} r="3" fill="var(--secondary)" />
       ))}
       <text x={pad} y={14} className="fill-current text-[10px]" style={{ fill: "var(--text-faint)" }}>
         {labels[0]}
@@ -314,7 +314,7 @@ function BarChart({ bars }: { bars: { label: string; value: number }[] }) {
       {bars.map((b) => (
         <div key={b.label} className="flex flex-1 flex-col items-center gap-2">
           <div
-            className="w-full rounded-t-md bg-gradient-to-t from-[var(--violet)] to-[var(--cyan)]"
+            className="w-full rounded-t-md bg-gradient-to-t from-[var(--primary)] to-[var(--secondary)]"
             style={{ height: `${(b.value / max) * 120}px` }}
             title={`${Math.round(b.value)} kg`}
           />

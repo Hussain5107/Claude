@@ -70,7 +70,7 @@ export default function LevelUpPrompt({ eligible, nextLabel, daysTrained, workou
   if (!visible || !nextLabel) return null;
 
   return (
-    <Card className="mb-6 border-[var(--volt)]/40 bg-gradient-to-br from-[rgba(198,255,61,0.10)] to-[rgba(34,211,238,0.10)] p-5">
+    <Card className="mb-6 border-[var(--volt)]/40 bg-gradient-to-br from-[rgba(198,255,61,0.10)] to-[rgb(var(--secondary-rgb)/0.10)] p-5">
       <div className="flex items-start gap-3">
         <span className="text-2xl">📈</span>
         <div className="min-w-0 flex-1">

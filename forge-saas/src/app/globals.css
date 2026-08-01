@@ -10,11 +10,43 @@
   --text: #f2f3f7;
   --text-dim: #9aa0ae;
   --text-faint: #5c6270;
-  --violet: #8b5cf6;
-  --cyan: #22d3ee;
+  --primary: #8b5cf6;
+  --secondary: #22d3ee;
+  /* Space-separated channels of the two above, for the places that need a
+     brand colour at partial opacity: rgb(var(--primary-rgb) / 0.3). */
+  --primary-rgb: 139 92 246;
+  --secondary-rgb: 34 211 238;
   --volt: #c6ff3d;
   --amber: #ffb020;
   --rose: #fb7185;
+}
+
+/* ---------------------------------------------------------------------------
+   Themes.
+
+   Everything in the app paints with --primary / --secondary, so a theme only
+   has to restate those (plus the background tints that go with them). Set
+   data-theme on any wrapping element and everything inside it follows; the
+   attribute is rendered on the server, so there's no flash of the wrong colour
+   on load. Keep these in sync with THEMES in src/lib/theme.ts.
+--------------------------------------------------------------------------- */
+
+[data-theme="blue"] {
+  --primary: #3b82f6;
+  --secondary: #38bdf8;
+  --primary-rgb: 59 130 246;
+  --secondary-rgb: 56 189 248;
+  --bg: #070a12;
+  --bg-2: #0d121d;
+}
+
+[data-theme="pink"] {
+  --primary: #ec4899;
+  --secondary: #a855f7;
+  --primary-rgb: 236 72 153;
+  --secondary-rgb: 168 85 247;
+  --bg: #0f0a11;
+  --bg-2: #17101b;
 }
 
 @theme inline {
@@ -27,8 +59,8 @@
   --color-text: var(--text);
   --color-text-dim: var(--text-dim);
   --color-text-faint: var(--text-faint);
-  --color-violet: var(--violet);
-  --color-cyan: var(--cyan);
+  --color-violet: var(--primary);
+  --color-cyan: var(--secondary);
   --color-volt: var(--volt);
   --color-amber: var(--amber);
   --color-rose: var(--rose);
@@ -41,8 +73,8 @@
 
 body {
   background:
-    radial-gradient(ellipse 900px 500px at 15% -5%, rgba(139, 92, 246, 0.2), transparent 60%),
-    radial-gradient(ellipse 700px 500px at 100% 10%, rgba(34, 211, 238, 0.12), transparent 60%),
+    radial-gradient(ellipse 900px 500px at 15% -5%, rgb(var(--primary-rgb) / 0.2), transparent 60%),
+    radial-gradient(ellipse 700px 500px at 100% 10%, rgb(var(--secondary-rgb) / 0.12), transparent 60%),
     var(--bg);
   color: var(--text);
   font-family: var(--font-body), sans-serif;
@@ -57,6 +89,17 @@ body {
 h1, h2, h3, h4 {
   font-family: var(--font-display), sans-serif;
   letter-spacing: -0.01em;
+}
+
+/* The signed-in shell. Repeats the body's ambient gradient using whichever
+   theme is active on this element, and covers the viewport so the untinted
+   body background never shows through. */
+.app-shell {
+  background:
+    radial-gradient(ellipse 900px 500px at 15% -5%, rgb(var(--primary-rgb) / 0.2), transparent 60%),
+    radial-gradient(ellipse 700px 500px at 100% 10%, rgb(var(--secondary-rgb) / 0.12), transparent 60%),
+    var(--bg);
+  min-height: 100vh;
 }
 
 .glass {

@@ -77,7 +77,7 @@ export default function InstallAppPrompt() {
             <ol className="mt-4 flex flex-col gap-3">
               {STEPS[platform].steps.map((step, i) => (
                 <li key={i} className="flex gap-3 text-sm text-[var(--text-dim)]">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--violet)] to-[var(--cyan)] text-[10px] font-bold text-white">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--secondary)] text-[10px] font-bold text-white">
                     {i + 1}
                   </span>
                   {step}

@@ -126,7 +126,7 @@ export function CardioCard({ plan }: { plan: CardioPlan }) {
                 Separate session
               </div>
               <div className="mt-1 text-sm text-[var(--text-dim)]">{plan.session}</div>
-              <div className="mt-1 text-xs text-[var(--cyan)]">{plan.frequency}</div>
+              <div className="mt-1 text-xs text-[var(--secondary)]">{plan.frequency}</div>
             </div>
           </div>
 

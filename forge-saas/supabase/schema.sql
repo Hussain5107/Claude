@@ -397,3 +397,18 @@ create or replace view public.review_stats as
   from public.reviews;
 
 grant select on public.review_stats to anon, authenticated;
+
+-- 16. THEME --------------------------------------------------------------------
+-- Which colour theme the app paints in. This is a look preference, not a second
+-- record of the user's sex — `profiles.sex` already holds that, and is used for
+-- the BMR calculation. Onboarding pre-selects a theme from the sex the user
+-- entered and lets them change it there and in Settings.
+--
+-- Defaults to 'forge', so every account that existed before themes keeps the
+-- original violet-and-cyan branding until they choose otherwise.
+
+alter table public.profiles add column if not exists theme text not null default 'forge';
+
+alter table public.profiles drop constraint if exists profiles_theme_check;
+alter table public.profiles add constraint profiles_theme_check
+  check (theme in ('forge', 'blue', 'pink'));

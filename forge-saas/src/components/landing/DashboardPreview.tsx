@@ -29,20 +29,20 @@ export default function DashboardPreview() {
       <svg viewBox={`0 0 ${w} ${h}`} className="w-full" role="img" aria-label="Example progress chart">
         <defs>
           <linearGradient id="preview-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--cyan)" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="var(--cyan)" stopOpacity="0" />
+            <stop offset="0%" stopColor="var(--secondary)" stopOpacity="0.3" />
+            <stop offset="100%" stopColor="var(--secondary)" stopOpacity="0" />
           </linearGradient>
         </defs>
         <path d={areaPath} fill="url(#preview-fill)" />
-        <path d={path} fill="none" stroke="var(--cyan)" strokeWidth="2.5" />
+        <path d={path} fill="none" stroke="var(--secondary)" strokeWidth="2.5" />
         {coords.map((c, i) => (
-          <circle key={i} cx={c.x} cy={c.y} r="3" fill="var(--cyan)" />
+          <circle key={i} cx={c.x} cy={c.y} r="3" fill="var(--secondary)" />
         ))}
       </svg>
       <div className="mt-5 grid grid-cols-3 gap-3">
         <PreviewStat label="Current streak" value="12d" accent="var(--amber)" />
         <PreviewStat label="Personal records" value="7" accent="var(--volt)" />
-        <PreviewStat label="Workouts logged" value="34" accent="var(--cyan)" />
+        <PreviewStat label="Workouts logged" value="34" accent="var(--secondary)" />
       </div>
       <p className="mt-4 text-center text-xs text-[var(--text-faint)]">
         Illustrative example — your dashboard fills in with your own real numbers as you train.

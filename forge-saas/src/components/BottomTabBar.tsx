@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTheme } from "./ThemeProvider";
 
 /**
  * Native-style bottom navigation.
@@ -71,18 +72,19 @@ const TABS: Tab[] = [
 
 export default function BottomTabBar() {
   const pathname = usePathname();
+  const theme = useTheme();
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--border)] bg-[rgba(10,11,15,0.92)] backdrop-blur-xl"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--border)] bg-[color-mix(in_srgb,var(--bg)_92%,transparent)] backdrop-blur-xl"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       {/* One shared gradient definition for whichever icon is active. */}
       <svg width="0" height="0" className="absolute" aria-hidden="true">
         <defs>
           <linearGradient id="tabGradient" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#8b5cf6" />
-            <stop offset="100%" stopColor="#22d3ee" />
+            <stop offset="0%" stopColor={theme.colors.primary} />
+            <stop offset="100%" stopColor={theme.colors.secondary} />
           </linearGradient>
         </defs>
       </svg>
@@ -101,7 +103,7 @@ export default function BottomTabBar() {
                 href={tab.href}
                 aria-current={active ? "page" : undefined}
                 className={`flex flex-col items-center gap-1 py-2.5 transition ${
-                  active ? "text-[var(--cyan)]" : "text-[var(--text-faint)]"
+                  active ? "text-[var(--secondary)]" : "text-[var(--text-faint)]"
                 }`}
               >
                 <span className="h-6 w-6">{tab.icon(active)}</span>
