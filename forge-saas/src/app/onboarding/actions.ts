@@ -31,6 +31,7 @@ export async function submitOnboarding(
     redirect("/login");
   }
 
+  const displayName = ((formData.get("displayName") as string) || "").trim().slice(0, 30);
   const age = Number(formData.get("age"));
   const sex = formData.get("sex") as Sex;
   const heightCm = Number(formData.get("heightCm"));
@@ -82,6 +83,7 @@ export async function submitOnboarding(
       weight_kg: weightKg,
       goal,
       experience,
+      display_name: displayName || null,
       day_offset: deriveDayOffset(user.id),
       training_location: trainingLocation,
       has_dumbbells_at_home: hasDumbbellsAtHome,

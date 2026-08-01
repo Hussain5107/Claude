@@ -5,6 +5,7 @@ import HomeClient from "@/components/HomeClient";
 import { weekDatesFor } from "@/lib/dates";
 import { weekdayToDayNumber } from "@/lib/dayRotation";
 import { checkProgression } from "@/lib/progression";
+import { resolveDisplayName } from "@/lib/displayName";
 import { cycleStatus } from "@/lib/cycle";
 import { isEligible, loadCycleContext } from "@/lib/cycleServer";
 
@@ -93,7 +94,7 @@ export default async function DashboardPage() {
 
   return (
     <HomeClient
-      email={user.email ?? ""}
+      name={resolveDisplayName(profile.display_name, user.email)}
       nutrition={program.nutrition}
       today={
         todayDay

@@ -60,6 +60,11 @@ export default function OnboardingPage() {
 
       <Card className="p-6">
         <form action={formAction} className="flex flex-col gap-5">
+          <div>
+            <Label htmlFor="displayName">What should we call you?</Label>
+            <Input id="displayName" name="displayName" maxLength={30} placeholder="Optional — e.g. Hussain" />
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="age">Age</Label>

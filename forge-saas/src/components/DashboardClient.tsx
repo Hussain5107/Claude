@@ -46,6 +46,7 @@ interface Props {
   streak: { current: number; longest: number; total: number };
   weekDates: string[]; // 7 ISO dates, index 0 = Sunday
   avatarUrl: string | null;
+  name: string;
   dayOffset: number;
   /** Null unless cycle tracking is on, set up, and current. */
   cycle: {
@@ -67,6 +68,7 @@ export default function DashboardClient({
   streak,
   weekDates,
   avatarUrl,
+  name,
   dayOffset,
   cycle,
 }: Props) {
@@ -178,6 +180,7 @@ export default function DashboardClient({
         title="Workouts"
         subtitle={`${daysPerWeek} days a week`}
         avatarUrl={avatarUrl}
+        name={name}
         right={
           <div className="flex items-center gap-2">
             {liveStreak.current > 0 && (

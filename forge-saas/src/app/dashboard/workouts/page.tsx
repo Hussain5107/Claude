@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { GeneratedProgram } from "@/lib/exercises/types";
 import DashboardClient from "@/components/DashboardClient";
 import { weekDatesFor } from "@/lib/dates";
+import { resolveDisplayName } from "@/lib/displayName";
 import { cycleStatus } from "@/lib/cycle";
 import { adaptForCycle } from "@/lib/cycleAdaptation";
 import { isEligible, loadCycleContext } from "@/lib/cycleServer";
@@ -105,6 +106,7 @@ export default async function WorkoutsPage() {
       }}
       weekDates={weekDates}
       avatarUrl={profile.avatar_url}
+      name={resolveDisplayName(profile.display_name, user.email)}
       dayOffset={profile.day_offset ?? 0}
       cycle={
         cycleState && !cycleState.stale

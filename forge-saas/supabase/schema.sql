@@ -485,3 +485,14 @@ create policy "cycle_checkins: delete own" on public.cycle_checkins
   for delete using (auth.uid() = user_id);
 
 create index if not exists cycle_checkins_user_date_idx on public.cycle_checkins (user_id, log_date);
+
+-- 18. DISPLAY NAME -------------------------------------------------------------
+-- What the user wants to be called on their dashboard. Optional: when it's
+-- empty the app falls back to the first word of their email address, which is
+-- what it did before this column existed.
+
+alter table public.profiles add column if not exists display_name text;
+
+alter table public.profiles drop constraint if exists profiles_display_name_check;
+alter table public.profiles add constraint profiles_display_name_check
+  check (display_name is null or char_length(display_name) between 1 and 30);

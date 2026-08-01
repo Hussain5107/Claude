@@ -1,5 +1,5 @@
 import Link from "next/link";
-import Image from "next/image";
+import Avatar from "./Avatar";
 
 /**
  * The title bar for a tabbed screen.
@@ -12,10 +12,12 @@ interface Props {
   title: string;
   subtitle?: string;
   avatarUrl?: string | null;
+  /** Used for the initial when there is no photo. */
+  name?: string;
   right?: React.ReactNode;
 }
 
-export default function AppHeader({ title, subtitle, avatarUrl, right }: Props) {
+export default function AppHeader({ title, subtitle, avatarUrl, name, right }: Props) {
   return (
     <header
       className="sticky top-0 z-30 -mx-4 mb-5 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--bg)_85%,transparent)] px-4 backdrop-blur-xl sm:-mx-6 sm:px-6"
@@ -33,16 +35,8 @@ export default function AppHeader({ title, subtitle, avatarUrl, right }: Props) 
         <div className="flex shrink-0 items-center gap-2">
           {right}
           {avatarUrl !== undefined && (
-            <Link
-              href="/dashboard/settings"
-              aria-label="Profile"
-              className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full border border-[var(--border-hi)] bg-[var(--surface-hi)]"
-            >
-              {avatarUrl ? (
-                <Image src={avatarUrl} alt="" fill className="object-cover" />
-              ) : (
-                <span className="flex h-full w-full items-center justify-center text-sm">👤</span>
-              )}
+            <Link href="/dashboard/settings" aria-label="Profile">
+              <Avatar url={avatarUrl} name={name} size={36} />
             </Link>
           )}
         </div>

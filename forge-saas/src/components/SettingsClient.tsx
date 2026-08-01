@@ -20,10 +20,12 @@ import ThemePicker from "./ThemePicker";
 import CycleSettingsCard from "./CycleSettingsCard";
 import type { CycleSettings } from "@/lib/cycle";
 import { resolveTheme, type ThemeName } from "@/lib/theme";
+import { fallbackName } from "@/lib/displayName";
 
 interface Profile {
   id: string;
   email: string | null;
+  display_name: string | null;
   avatar_url: string | null;
   date_of_birth: string | null;
   country: string | null;
@@ -82,6 +84,7 @@ export default function SettingsClient({
 
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url);
   const [uploading, setUploading] = useState(false);
+  const [displayName, setDisplayName] = useState(profile.display_name ?? "");
   const [dateOfBirth, setDateOfBirth] = useState(profile.date_of_birth ?? "");
   const [country, setCountry] = useState(profile.country ?? "");
   const [phoneNumber, setPhoneNumber] = useState(profile.phone_number ?? "");
@@ -198,6 +201,7 @@ export default function SettingsClient({
     setSaving(true);
     setSaveError(null);
     const result = await updateProfile({
+      displayName: displayName || null,
       dateOfBirth: dateOfBirth || null,
       country: country || null,
       phoneNumber: phoneNumber || null,
@@ -278,6 +282,20 @@ export default function SettingsClient({
         {saveError && <p className="mb-4 text-sm text-[var(--rose)]">{saveError}</p>}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <Label htmlFor="displayName">What should we call you?</Label>
+            <Input
+              id="displayName"
+              value={displayName}
+              maxLength={30}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder={fallbackName(profile.email)}
+            />
+            <p className="mt-1 text-xs text-[var(--text-faint)]">
+              Shown on your home screen. Leave it blank and we&apos;ll use{" "}
+              <b>{fallbackName(profile.email)}</b>, taken from your email.
+            </p>
+          </div>
           <div>
             <Label htmlFor="dob">Date of birth</Label>
             <Input id="dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} />

@@ -17,6 +17,7 @@ async function requireUser() {
 }
 
 export interface UpdateProfileInput {
+  displayName: string | null;
   dateOfBirth: string | null;
   country: string | null;
   phoneNumber: string | null;
@@ -32,9 +33,18 @@ export interface UpdateProfileInput {
 export async function updateProfile(input: UpdateProfileInput): Promise<{ error: string | null }> {
   const { supabase, userId } = await requireUser();
 
+  // Trimmed, and blank stored as null rather than "" — the dashboard treats
+  // null as "fall back to the email", and an empty string would leave the
+  // greeting with no name at all.
+  const displayName = input.displayName?.trim() || null;
+  if (displayName && displayName.length > 30) {
+    return { error: "That name is a bit long — 30 characters or fewer." };
+  }
+
   const { error } = await supabase
     .from("profiles")
     .update({
+      display_name: displayName,
       date_of_birth: input.dateOfBirth || null,
       country: input.country || null,
       phone_number: input.phoneNumber || null,

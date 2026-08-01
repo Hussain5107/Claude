@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import type { Goal, NutritionTargets } from "@/lib/exercises/types";
 import { logIntake } from "@/app/dashboard/actions";
 import { isBirthdayToday } from "@/lib/dates";
 import type { ProgressionStatus } from "@/lib/progression";
 import type { CycleStatus } from "@/lib/cycle";
 import type { CheckIn } from "@/lib/cycleAdaptation";
+import Avatar from "./Avatar";
 import CycleCard from "./CycleCard";
 import InstallAppPrompt from "./InstallAppPrompt";
 import ReviewPrompt from "./ReviewPrompt";
@@ -32,7 +32,8 @@ interface TodaySession {
 }
 
 interface Props {
-  email: string;
+  /** Their chosen name, already resolved against the email fallback. */
+  name: string;
   nutrition: NutritionTargets;
   today: TodaySession | null;
   setsPerDay: number[]; // 7 entries, index 0 = Sunday
@@ -63,7 +64,7 @@ const GOAL_LABELS: Record<Goal, string> = {
 };
 
 export default function HomeClient({
-  email,
+  name,
   nutrition,
   today,
   setsPerDay,
@@ -95,7 +96,6 @@ export default function HomeClient({
     setGreeting(hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening");
   }, []);
 
-  const name = displayName(email);
   const targetWaterMl = Math.round(nutrition.waterL * 1000);
   const todayIndex = new Date(todayIso + "T12:00:00").getDay();
   const maxSets = Math.max(1, ...setsPerDay);
@@ -142,30 +142,24 @@ export default function HomeClient({
         className="mb-5 flex items-center justify-between gap-3"
         style={{ paddingTop: "calc(1.25rem + env(safe-area-inset-top))" }}
       >
-        <div className="min-w-0">
-          <p className="text-xs font-bold uppercase tracking-wide text-[var(--text-faint)]">
-            {greeting}
-          </p>
-          <h1 className="truncate text-2xl font-extrabold">{name}</h1>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {streak.current > 0 && (
-            <span className="rounded-full bg-[rgba(255,176,32,0.12)] px-3 py-1.5 text-sm font-bold text-[var(--amber)]">
-              🔥 {streak.current}
+        <Link
+          href="/dashboard/settings"
+          aria-label="Edit your profile"
+          className="flex min-w-0 items-center gap-3 transition active:scale-[0.98]"
+        >
+          <Avatar url={avatarUrl} name={name} size={52} ring />
+          <span className="min-w-0">
+            <span className="block text-xs font-bold uppercase tracking-wide text-[var(--text-faint)]">
+              {greeting}
             </span>
-          )}
-          <Link
-            href="/dashboard/settings"
-            aria-label="Profile"
-            className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full border border-[var(--border-hi)] bg-[var(--surface-hi)]"
-          >
-            {avatarUrl ? (
-              <Image src={avatarUrl} alt="" fill className="object-cover" />
-            ) : (
-              <span className="flex h-full w-full items-center justify-center text-lg">👤</span>
-            )}
-          </Link>
-        </div>
+            <span className="block truncate text-2xl font-extrabold">{name}</span>
+          </span>
+        </Link>
+        {streak.current > 0 && (
+          <span className="shrink-0 rounded-full bg-[rgba(255,176,32,0.12)] px-3 py-1.5 text-sm font-bold text-[var(--amber)]">
+            🔥 {streak.current}
+          </span>
+        )}
       </header>
 
       <InstallAppPrompt />
@@ -432,12 +426,4 @@ function ActionCard({
       <div className="text-[11px] text-[var(--text-faint)]">{hint}</div>
     </Link>
   );
-}
-
-/** "hussain.raza@gmail.com" -> "Hussain" — there's no name field to use. */
-function displayName(email: string): string {
-  const local = email.split("@")[0] ?? "";
-  const first = local.split(/[._\-+0-9]/).filter(Boolean)[0] ?? local;
-  if (!first) return "Athlete";
-  return first.charAt(0).toUpperCase() + first.slice(1);
 }
