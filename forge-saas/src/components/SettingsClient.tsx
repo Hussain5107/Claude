@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -14,7 +13,7 @@ import {
 import type { DaysPerWeek, TrainingLocation } from "@/lib/exercises/types";
 import { subscribeToPush, supportsPush } from "@/lib/pushClient";
 import { Button, Card, Checkbox, Input, Label } from "./ui";
-import { Logo } from "./Logo";
+import AppHeader from "./AppHeader";
 
 interface Profile {
   id: string;
@@ -223,17 +222,8 @@ export default function SettingsClient({
   }
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 pb-24 pt-6 sm:px-6">
-      <header className="mb-6 flex items-center justify-between">
-        <Link href="/dashboard">
-          <Logo />
-        </Link>
-        <Link href="/dashboard" className="text-xs text-[var(--text-faint)] hover:text-[var(--text)]">
-          ← Back to today
-        </Link>
-      </header>
-
-      <h1 className="mb-6 text-2xl font-extrabold">Settings</h1>
+    <main className="mx-auto w-full max-w-2xl px-4 pb-4 sm:px-6">
+      <AppHeader title="Profile" subtitle={profile.email ?? undefined} />
 
       <Card className="p-6">
         <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-[var(--text-faint)]">Profile</h2>
@@ -515,6 +505,13 @@ export default function SettingsClient({
           </div>
         )}
       </Card>
+
+      {/* Log out lives here now that the tab bar replaced the top-right menu. */}
+      <form action="/auth/signout" method="post" className="mt-6">
+        <Button type="submit" className="w-full">
+          Log out
+        </Button>
+      </form>
     </main>
   );
 }

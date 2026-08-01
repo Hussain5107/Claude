@@ -44,10 +44,12 @@ export default function NutritionToast({ goal, isoDate, completed, total }: Prop
 
   const tip = tipForDay(goal, isoDate);
 
+  // Offset so the toast clears the tab bar instead of sitting behind it.
   return (
     <div
       role="status"
-      className={`fixed inset-x-3 bottom-4 z-50 mx-auto max-w-md transition-all duration-200 sm:inset-x-auto sm:right-6 ${
+      style={{ bottom: "calc(80px + env(safe-area-inset-bottom))" }}
+      className={`fixed inset-x-3 z-50 mx-auto max-w-md transition-all duration-200 sm:inset-x-auto sm:right-6 ${
         leaving ? "translate-y-2 opacity-0" : "translate-y-0 opacity-100"
       }`}
     >

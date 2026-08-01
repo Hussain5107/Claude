@@ -1,13 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import Image from "next/image";
 import { estimated1RM } from "@/lib/tracking";
 import { createClient } from "@/lib/supabase/client";
 import { saveProgressPhoto, deleteProgressPhoto } from "@/app/dashboard/progress/actions";
-import { Button, Card, Input } from "./ui";
-import { Logo } from "./Logo";
+import { Card, Input } from "./ui";
+import AppHeader from "./AppHeader";
 import AiCoachPanel from "./AiCoachPanel";
 
 interface SetRow {
@@ -119,19 +118,10 @@ export default function ProgressClient({ sets, personalRecords, streak, userId, 
   }
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 pb-24 pt-6 sm:px-6">
-      <header className="mb-6 flex items-center justify-between">
-        <Link href="/dashboard">
-          <Logo />
-        </Link>
-        <Link href="/dashboard" className="text-xs text-[var(--text-faint)] hover:text-[var(--text)]">
-          ← Back to today
-        </Link>
-      </header>
+    <main className="mx-auto w-full max-w-3xl px-4 pb-4 sm:px-6">
+      <AppHeader title="Progress" subtitle="Everything you've logged" />
 
-      <h1 className="mb-6 text-2xl font-extrabold">Progress</h1>
-
-      <div className="grid grid-cols-3 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-2">
         <StatTile label="Current streak" value={`${streak.current}d`} accent="var(--amber)" />
         <StatTile label="Longest streak" value={`${streak.longest}d`} accent="var(--volt)" />
         <StatTile label="Workouts logged" value={String(streak.total)} accent="var(--cyan)" />

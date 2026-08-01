@@ -47,6 +47,11 @@ body {
   color: var(--text);
   font-family: var(--font-body), sans-serif;
   min-height: 100vh;
+  /* Keeps a scroll at the top of a list from turning into the browser's
+     pull-to-refresh, which is what makes an installed PWA feel like a web page
+     rather than an app. */
+  overscroll-behavior-y: contain;
+  -webkit-text-size-adjust: 100%;
 }
 
 h1, h2, h3, h4 {

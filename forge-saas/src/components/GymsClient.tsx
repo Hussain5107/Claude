@@ -1,11 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import type { Map as LeafletMap } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Button, Card } from "./ui";
-import { Logo } from "./Logo";
+import AppHeader from "./AppHeader";
 import type { Gym } from "@/app/api/gyms/route";
 
 type Status = "idle" | "locating" | "loading" | "ready" | "error";
@@ -157,18 +156,10 @@ export default function GymsClient() {
   const busy = status === "locating" || status === "loading";
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 pb-24 pt-6 sm:px-6">
-      <header className="mb-6 flex items-center justify-between">
-        <Link href="/dashboard">
-          <Logo />
-        </Link>
-        <Link href="/dashboard" className="text-xs text-[var(--text-faint)] hover:text-[var(--text)]">
-          ← Back to today
-        </Link>
-      </header>
+    <main className="mx-auto w-full max-w-3xl px-4 pb-4 sm:px-6">
+      <AppHeader title="Gyms near you" subtitle="From OpenStreetMap" />
 
-      <h1 className="text-2xl font-extrabold">Gyms near you</h1>
-      <p className="mt-1 text-sm text-[var(--text-dim)]">
+      <p className="text-sm text-[var(--text-dim)]">
         Find a gym close by — useful if you train at home and want somewhere to lift heavier, or
         you&apos;re somewhere new.
       </p>

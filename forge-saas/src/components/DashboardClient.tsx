@@ -1,32 +1,22 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import type { GeneratedProgram } from "@/lib/exercises/types";
 import { MUSCLE_LABELS } from "@/lib/exercises/types";
 import type { LoggedSet } from "@/lib/exercises/loggingTypes";
 import ExerciseCard from "./ExerciseCard";
-import NutritionPanel from "./NutritionPanel";
-import { Button } from "./ui";
+import AppHeader from "./AppHeader";
 import {
   toggleExerciseDone,
   saveExerciseNote,
   logSet,
-  logIntake,
   getAlternatives,
   swapExercise,
 } from "@/app/dashboard/actions";
-import { Logo } from "./Logo";
-import ReviewPrompt from "./ReviewPrompt";
-import InstallAppPrompt from "./InstallAppPrompt";
-import LevelUpPrompt from "./LevelUpPrompt";
 import { PrepList, CardioCard } from "./SessionExtras";
 import NutritionToast from "./NutritionToast";
-import { isBirthdayToday } from "@/lib/dates";
 import { weekdayToDayNumber } from "@/lib/dayRotation";
-import type { ProgressionStatus } from "@/lib/progression";
 import { cardioPlan } from "@/lib/cardio";
 
 interface ProgressRow {
@@ -46,41 +36,28 @@ interface WorkoutSetRow {
 }
 
 interface Props {
-  email: string;
   program: GeneratedProgram;
   progressRows: ProgressRow[];
   weekSetRows: WorkoutSetRow[];
   previousBestByExercise: Record<string, LoggedSet>;
   streak: { current: number; longest: number; total: number };
   weekDates: string[]; // 7 ISO dates, index 0 = Sunday
-  accountCreatedAt: string;
-  alreadyReviewed: boolean;
-  dateOfBirth: string | null;
   avatarUrl: string | null;
   dayOffset: number;
-  waterMl: number;
-  proteinG: number;
-  progression: ProgressionStatus;
 }
 
-const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
+const FULL_DAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export default function DashboardClient({
-  email,
   program,
   progressRows,
   weekSetRows,
   previousBestByExercise,
   streak,
   weekDates,
-  accountCreatedAt,
-  alreadyReviewed,
-  dateOfBirth,
   avatarUrl,
   dayOffset,
-  waterMl,
-  proteinG,
-  progression,
 }: Props) {
   const router = useRouter();
   const today = new Date();
@@ -184,68 +161,36 @@ export default function DashboardClient({
     return result;
   }
 
-  async function handleLogIntake(waterMlDelta: number, proteinGDelta: number) {
-    const todayIso = weekDates[today.getDay()];
-    const result = await logIntake(todayIso, waterMlDelta, proteinGDelta);
-    return { error: result.error };
-  }
-
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 pb-24 pt-6 sm:px-6">
-      <header className="mb-6 flex items-center justify-between">
-        <Link href="/dashboard">
-          <Logo />
-        </Link>
-        <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-[var(--text-faint)] sm:gap-4">
-          {liveStreak.current > 0 && (
-            <span className="flex items-center gap-1 font-bold text-[var(--amber)]">
-              🔥 {liveStreak.current} day{liveStreak.current === 1 ? "" : "s"}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={toggleVoiceCoach}
-            className={`rounded-full border px-2.5 py-1 font-bold transition ${
-              voiceEnabled
-                ? "border-[var(--cyan)] text-[var(--cyan)]"
-                : "border-[var(--border)] text-[var(--text-faint)] hover:text-[var(--text)]"
-            }`}
-            title={voiceEnabled ? "Voice coach on" : "Voice coach off"}
-          >
-            🎙️ Coach {voiceEnabled ? "on" : "off"}
-          </button>
-          <Link href="/dashboard/gyms" className="hover:text-[var(--text)]">
-            Gyms
-          </Link>
-          <Link href="/dashboard/progress" className="hover:text-[var(--text)]">
-            Progress
-          </Link>
-          <Link
-            href="/dashboard/settings"
-            className="flex items-center gap-1.5 hover:text-[var(--text)]"
-            title="Settings"
-          >
-            {avatarUrl ? (
-              <span className="relative h-6 w-6 shrink-0 overflow-hidden rounded-full border border-[var(--border-hi)]">
-                <Image src={avatarUrl} alt="" fill className="object-cover" />
-              </span>
-            ) : (
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[var(--border-hi)] bg-[var(--surface-hi)] text-xs">
-                👤
+    <main className="mx-auto w-full max-w-3xl px-4 pb-4 sm:px-6">
+      <AppHeader
+        title="Workouts"
+        subtitle={`${daysPerWeek} days a week`}
+        avatarUrl={avatarUrl}
+        right={
+          <div className="flex items-center gap-2">
+            {liveStreak.current > 0 && (
+              <span className="rounded-full bg-[rgba(255,176,32,0.12)] px-2.5 py-1 text-xs font-bold text-[var(--amber)]">
+                🔥 {liveStreak.current}
               </span>
             )}
-            <span className="hidden sm:inline">Settings</span>
-          </Link>
-          <span className="hidden sm:inline">{email}</span>
-          <form action="/auth/signout" method="post">
-            <Button type="submit" className="px-3 py-1.5 text-xs">
-              Log out
-            </Button>
-          </form>
-        </div>
-      </header>
+            <button
+              type="button"
+              onClick={toggleVoiceCoach}
+              aria-pressed={voiceEnabled}
+              title={voiceEnabled ? "Voice coach on" : "Voice coach off"}
+              className={`rounded-full border px-2.5 py-1 text-xs font-bold transition ${
+                voiceEnabled
+                  ? "border-[var(--cyan)] text-[var(--cyan)]"
+                  : "border-[var(--border)] text-[var(--text-faint)]"
+              }`}
+            >
+              🎙️
+            </button>
+          </div>
+        }
+      />
 
-      <InstallAppPrompt />
       {day && selectedIndex === today.getDay() && (
         <NutritionToast
           goal={program.goal}
@@ -254,64 +199,55 @@ export default function DashboardClient({
           total={day.exercises.length}
         />
       )}
-      <LevelUpPrompt
-        eligible={progression.eligible}
-        nextLabel={progression.nextLabel}
-        daysTrained={progression.daysTrained}
-        workoutsDone={progression.workoutsDone}
-      />
-      <ReviewPrompt accountCreatedAt={accountCreatedAt} alreadyReviewed={alreadyReviewed} />
 
-      {isBirthdayToday(dateOfBirth) && (
-        <div className="mb-6 rounded-2xl border border-[rgba(255,176,32,0.4)] bg-gradient-to-br from-[rgba(255,176,32,0.15)] to-[rgba(139,92,246,0.15)] p-5 text-center">
-          <div className="text-3xl">🎂</div>
-          <h2 className="mt-1 text-lg font-extrabold">Happy Birthday!</h2>
-          <p className="mt-1 text-sm text-[var(--text-dim)]">
-            Another year stronger. Make today's session count.
-          </p>
-        </div>
-      )}
-
-      <NutritionPanel
-        nutrition={program.nutrition}
-        waterMl={waterMl}
-        proteinG={proteinG}
-        onLogIntake={handleLogIntake}
-      />
-
-      <div className="mt-6 grid grid-cols-7 gap-2">
+      {/* Week strip — a dot marks a training day so rest days read at a glance. */}
+      <div className="grid grid-cols-7 gap-1.5">
         {DAY_LABELS.map((label, i) => {
           const d = program.days.find(
             (d) => d.dayNumber === weekdayToDayNumber(i, dayOffset, daysPerWeek),
           );
           const isSelected = i === selectedIndex;
+          const isToday = i === today.getDay();
           return (
             <button
-              key={label}
+              key={i}
               onClick={() => setSelectedIndex(i)}
-              className={`rounded-xl p-3 text-center transition ${
+              aria-label={`${FULL_DAY_LABELS[i]} — ${d ? d.name : "Rest"}`}
+              className={`flex flex-col items-center gap-1.5 rounded-2xl py-2.5 transition active:scale-95 ${
                 isSelected
-                  ? "bg-gradient-to-br from-[var(--violet)] to-[var(--cyan)] text-white"
-                  : "border border-[var(--border)] bg-[var(--surface)] hover:border-[var(--border-hi)]"
+                  ? "bg-gradient-to-br from-[var(--violet)] to-[var(--cyan)] text-white shadow-[0_8px_20px_rgba(139,92,246,0.3)]"
+                  : "border border-[var(--border)] bg-[var(--surface)]"
               }`}
             >
-              <div
-                className={`text-[11px] font-bold uppercase tracking-wide ${
-                  isSelected ? "text-white/80" : "text-[var(--text-faint)]"
+              <span
+                className={`text-xs font-bold ${
+                  isSelected
+                    ? "text-white"
+                    : isToday
+                      ? "text-[var(--cyan)]"
+                      : "text-[var(--text-dim)]"
                 }`}
               >
                 {label}
-              </div>
-              <div className={`mt-1 text-xs font-bold ${isSelected ? "text-white" : "text-[var(--text-dim)]"}`}>
-                {d ? d.name : "Rest"}
-              </div>
+              </span>
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  d
+                    ? isSelected
+                      ? "bg-white"
+                      : "bg-[var(--violet)]"
+                    : isSelected
+                      ? "bg-white/35"
+                      : "bg-[var(--border-hi)]"
+                }`}
+              />
             </button>
           );
         })}
       </div>
 
       {!day ? (
-        <div className="glass mt-8 rounded-[18px] border border-[var(--border)] p-14 text-center">
+        <div className="glass mt-6 rounded-[18px] border border-[var(--border)] p-10 text-center">
           <div className="mb-3 text-4xl">🌙</div>
           <h2 className="text-xl font-extrabold">Full rest. Let the muscle grow.</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-[var(--text-dim)]">
@@ -321,16 +257,25 @@ export default function DashboardClient({
         </div>
       ) : (
         <>
-          <div className="mt-8 mb-4 flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-xl font-extrabold">{day.name}</h2>
-              <span className="text-xs font-bold uppercase tracking-wide text-[var(--text-faint)]">
-                {day.subtitle}
+          {/* Session header card — the mobile equivalent of a screen title. */}
+          <div className="glass mt-5 mb-5 rounded-[18px] border border-[var(--border)] p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="text-xl font-extrabold">{day.name}</h2>
+                <span className="text-xs font-bold uppercase tracking-wide text-[var(--text-faint)]">
+                  {day.subtitle}
+                </span>
+              </div>
+              <span className="shrink-0 rounded-full bg-[var(--surface-hi)] px-3 py-1 font-mono text-xs font-bold">
+                {completedCount}/{day.exercises.length}
               </span>
             </div>
-            <span className="text-xs font-bold text-[var(--text-dim)]">
-              {completedCount} / {day.exercises.length} done
-            </span>
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--border)]">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-[var(--violet)] to-[var(--cyan)] transition-all"
+                style={{ width: `${(completedCount / day.exercises.length) * 100}%` }}
+              />
+            </div>
           </div>
 
           <PrepList

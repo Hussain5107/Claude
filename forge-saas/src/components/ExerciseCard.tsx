@@ -155,7 +155,7 @@ export default function ExerciseCard({
         >
           ✓
         </span>
-        <span className="hidden h-13 w-11 shrink-0 overflow-hidden rounded-lg bg-[var(--bg-2)] sm:block">
+        <span className="block h-13 w-11 shrink-0 overflow-hidden rounded-lg bg-[var(--bg-2)]">
           {!imgError ? (
             <Image
               src={ex.image}
@@ -181,7 +181,12 @@ export default function ExerciseCard({
             >
               {ex.difficulty}
             </span>
-            <span>{ex.equip}</span>
+            {/* On a phone the sets/rest column is hidden, so carry the numbers
+                here — they're the first thing you look for. */}
+            <span className="font-mono font-bold text-[var(--text-dim)] sm:hidden">
+              {ex.sets}×{ex.reps}
+            </span>
+            <span className="truncate">{ex.equip}</span>
           </span>
         </span>
         <span className="hidden shrink-0 gap-3.5 text-center sm:flex">

@@ -33,6 +33,9 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#0a0b0f",
+  // Lets the app paint under the notch and home indicator, which is what makes
+  // env(safe-area-inset-*) report real values for the tab bar and headers.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
