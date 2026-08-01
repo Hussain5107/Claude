@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { estimated1RM, updateStreak, type StreakState } from "@/lib/tracking";
-import { libraryFor, prescribeExercise } from "@/lib/exercises/generator";
+import { generateProgram, libraryFor, prescribeExercise } from "@/lib/exercises/generator";
+import { checkProgression } from "@/lib/progression";
 import { findAlternatives, rankAlternatives } from "@/lib/exercises/alternatives";
 import type { MatchQuality } from "@/lib/exercises/alternatives";
 import type { GeneratedProgram, UserProfile } from "@/lib/exercises/types";
@@ -290,6 +291,56 @@ export async function swapExercise(
 
   revalidatePath("/dashboard");
   return { error: null };
+}
+
+/** Steps the user up a level and rebuilds their plan with the extra volume and
+ *  intensity that level gets. Re-checks eligibility server-side. */
+export async function levelUp(): Promise<{ error: string | null; newLevel?: string }> {
+  const { supabase, userId } = await requireUser();
+
+  const profile = await loadUserProfile(supabase, userId);
+  if (!profile) return { error: "Couldn't load your profile." };
+
+  const { data: profileRow } = await supabase
+    .from("profiles")
+    .select("created_at")
+    .eq("id", userId)
+    .single();
+  const { data: streakRow } = await supabase
+    .from("streaks")
+    .select("total_workouts")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!profileRow) return { error: "Couldn't load your profile." };
+
+  // Checked again here rather than trusting the button — the client could be
+  // stale, or the request could be replayed.
+  const status = checkProgression(
+    profile.experience,
+    profileRow.created_at,
+    streakRow?.total_workouts ?? 0,
+  );
+  if (!status.eligible || !status.next) {
+    return { error: "You're not eligible to move up a level yet." };
+  }
+
+  const upgraded: UserProfile = { ...profile, experience: status.next };
+
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .update({ experience: status.next })
+    .eq("id", userId);
+  if (updateError) return { error: updateError.message };
+
+  const { error: programError } = await supabase
+    .from("programs")
+    .upsert({ user_id: userId, program: generateProgram(upgraded), created_at: new Date().toISOString() });
+  if (programError) return { error: programError.message };
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/settings");
+  return { error: null, newLevel: status.next };
 }
 
 export interface IntakeResult {

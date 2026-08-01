@@ -21,8 +21,10 @@ import {
 import { Logo } from "./Logo";
 import ReviewPrompt from "./ReviewPrompt";
 import InstallAppPrompt from "./InstallAppPrompt";
+import LevelUpPrompt from "./LevelUpPrompt";
 import { isBirthdayToday } from "@/lib/dates";
 import { weekdayToDayNumber } from "@/lib/dayRotation";
+import type { ProgressionStatus } from "@/lib/progression";
 
 interface ProgressRow {
   log_date: string;
@@ -55,6 +57,7 @@ interface Props {
   dayOffset: number;
   waterMl: number;
   proteinG: number;
+  progression: ProgressionStatus;
 }
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -74,6 +77,7 @@ export default function DashboardClient({
   dayOffset,
   waterMl,
   proteinG,
+  progression,
 }: Props) {
   const router = useRouter();
   const today = new Date();
@@ -237,6 +241,12 @@ export default function DashboardClient({
       </header>
 
       <InstallAppPrompt />
+      <LevelUpPrompt
+        eligible={progression.eligible}
+        nextLabel={progression.nextLabel}
+        daysTrained={progression.daysTrained}
+        workoutsDone={progression.workoutsDone}
+      />
       <ReviewPrompt accountCreatedAt={accountCreatedAt} alreadyReviewed={alreadyReviewed} />
 
       {isBirthdayToday(dateOfBirth) && (

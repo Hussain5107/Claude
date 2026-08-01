@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { GeneratedProgram } from "@/lib/exercises/types";
 import DashboardClient from "@/components/DashboardClient";
+import { checkProgression } from "@/lib/progression";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -94,6 +95,12 @@ export default async function DashboardPage() {
     .eq("log_date", todayIso)
     .maybeSingle();
 
+  const progression = checkProgression(
+    profile.experience,
+    profile.created_at,
+    streakRow?.total_workouts ?? 0,
+  );
+
   return (
     <DashboardClient
       email={user.email ?? ""}
@@ -114,6 +121,7 @@ export default async function DashboardPage() {
       dayOffset={profile.day_offset ?? 0}
       waterMl={intakeRow?.water_ml ?? 0}
       proteinG={intakeRow?.protein_g ?? 0}
+      progression={progression}
     />
   );
 }
