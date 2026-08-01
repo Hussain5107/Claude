@@ -5,6 +5,8 @@ import HomeClient from "@/components/HomeClient";
 import { weekDatesFor } from "@/lib/dates";
 import { weekdayToDayNumber } from "@/lib/dayRotation";
 import { checkProgression } from "@/lib/progression";
+import { cycleStatus } from "@/lib/cycle";
+import { isEligible, loadCycleContext } from "@/lib/cycleServer";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -62,6 +64,12 @@ export default async function DashboardPage() {
     .eq("log_date", todayIso)
     .maybeSingle();
 
+  // Cycle tracking is opt-in and only offered to some accounts, so skip the
+  // lookup entirely when it doesn't apply.
+  const cycleEligible = isEligible(profile.sex, profile.plan);
+  const cycle = cycleEligible ? await loadCycleContext(supabase, user.id, todayIso) : null;
+  const cycleState = cycle ? cycleStatus(cycle.settings, today) : null;
+
   const { data: reviewRow } = await supabase
     .from("reviews")
     .select("id")
@@ -116,6 +124,17 @@ export default async function DashboardPage() {
       dateOfBirth={profile.date_of_birth}
       accountCreatedAt={profile.created_at}
       alreadyReviewed={!!reviewRow}
+      cycle={
+        cycleState && cycle
+          ? {
+              status: cycleState,
+              checkIn: cycle.checkIn,
+              cycleLength: cycle.settings.averageCycleLength,
+            }
+          : null
+      }
+      cycleEligible={cycleEligible}
+      cycleEnabled={cycle?.settings.enabled ?? false}
       progression={checkProgression(
         profile.experience,
         profile.created_at,

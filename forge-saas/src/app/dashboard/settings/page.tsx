@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SettingsClient from "@/components/SettingsClient";
+import { isEligible, loadCycleContext } from "@/lib/cycleServer";
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -20,5 +21,16 @@ export default async function SettingsPage() {
     .order("log_date", { ascending: false })
     .limit(10);
 
-  return <SettingsClient profile={profile} recentMetrics={recentMetrics ?? []} />;
+  const cycleEligible = isEligible(profile.sex, profile.plan);
+  const cycle = cycleEligible
+    ? await loadCycleContext(supabase, user.id, new Date().toISOString().slice(0, 10))
+    : null;
+
+  return (
+    <SettingsClient
+      profile={profile}
+      recentMetrics={recentMetrics ?? []}
+      cycle={cycle ? { eligible: true, ...cycle.settings } : null}
+    />
+  );
 }

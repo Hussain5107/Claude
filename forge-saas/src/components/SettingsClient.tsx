@@ -17,6 +17,8 @@ import { subscribeToPush, supportsPush } from "@/lib/pushClient";
 import { Button, Card, Checkbox, Input, Label } from "./ui";
 import AppHeader from "./AppHeader";
 import ThemePicker from "./ThemePicker";
+import CycleSettingsCard from "./CycleSettingsCard";
+import type { CycleSettings } from "@/lib/cycle";
 import { resolveTheme, type ThemeName } from "@/lib/theme";
 
 interface Profile {
@@ -66,9 +68,12 @@ function formatHour(h: number): string {
 export default function SettingsClient({
   profile,
   recentMetrics,
+  cycle,
 }: {
   profile: Profile;
   recentMetrics: HealthMetric[];
+  /** Null when the feature isn't offered to this account. */
+  cycle: (CycleSettings & { eligible: true }) | null;
 }) {
   const router = useRouter();
   const [theme, setTheme] = useState<ThemeName>(resolveTheme(profile.theme).name);
@@ -297,6 +302,15 @@ export default function SettingsClient({
         </p>
         {themeError && <p className="mt-2 text-sm text-[var(--rose)]">Couldn&apos;t save that: {themeError}</p>}
       </Card>
+
+      {cycle && (
+        <CycleSettingsCard
+          enabled={cycle.enabled}
+          lastPeriodStart={cycle.lastPeriodStart}
+          averageCycleLength={cycle.averageCycleLength}
+          periodDuration={cycle.periodDuration}
+        />
+      )}
 
       <Card className="mt-6 p-6">
         <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-[var(--text-faint)]">Your program</h2>

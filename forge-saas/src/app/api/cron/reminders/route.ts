@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import webpush from "web-push";
 import { createServiceClient } from "@/lib/supabase/service";
+import { cycleStatus } from "@/lib/cycle";
+import { adaptForCycle } from "@/lib/cycleAdaptation";
 
 webpush.setVapidDetails(
   process.env.VAPID_SUBJECT!,
@@ -29,17 +31,49 @@ export async function GET(request: NextRequest) {
     .eq("workout_reminder_enabled", true)
     .eq("workout_reminder_hour", currentHour);
 
+  // The workout reminder gets a cycle-aware line for users who opted in, so
+  // they don't have to open the app to know what today is likely to feel like.
+  // Supportive, never medical, and never telling anyone to skip training.
+  const workoutIds = (workoutUsers ?? []).map((u) => u.id);
+  const cycleBodyByUser = new Map<string, string>();
+
+  if (workoutIds.length > 0) {
+    const { data: cycleRows } = await supabase
+      .from("cycle_settings")
+      .select("user_id, enabled, last_period_start, average_cycle_length, period_duration")
+      .eq("enabled", true)
+      .in("user_id", workoutIds);
+
+    for (const row of cycleRows ?? []) {
+      const status = cycleStatus({
+        enabled: row.enabled,
+        lastPeriodStart: row.last_period_start,
+        averageCycleLength: row.average_cycle_length,
+        periodDuration: row.period_duration,
+      });
+      // Skip anyone whose start date has drifted — a wrong phase in a push
+      // notification is worse than no phase at all.
+      if (!status || status.stale) continue;
+      cycleBodyByUser.set(row.user_id, adaptForCycle(status.phase, null).headline);
+    }
+  }
+
   const jobs: { userId: string; title: string; body: string }[] = [
     ...(waterUsers ?? []).map((u) => ({
       userId: u.id,
       title: "💧 Hydration check",
       body: "Time for some water — your body needs it to recover and train well.",
     })),
-    ...(workoutUsers ?? []).map((u) => ({
-      userId: u.id,
-      title: "🏋️ Workout reminder",
-      body: "Today's session is waiting for you on FORGE.",
-    })),
+    ...(workoutUsers ?? []).map((u) => {
+      const cycleLine = cycleBodyByUser.get(u.id);
+      return {
+        userId: u.id,
+        title: "🏋️ Workout reminder",
+        body: cycleLine
+          ? `${cycleLine}. Today's session is ready on FORGE.`
+          : "Today's session is waiting for you on FORGE.",
+      };
+    }),
   ];
 
   let sent = 0;

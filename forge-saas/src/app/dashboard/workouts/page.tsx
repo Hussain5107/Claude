@@ -3,6 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import type { GeneratedProgram } from "@/lib/exercises/types";
 import DashboardClient from "@/components/DashboardClient";
 import { weekDatesFor } from "@/lib/dates";
+import { cycleStatus } from "@/lib/cycle";
+import { adaptForCycle } from "@/lib/cycleAdaptation";
+import { isEligible, loadCycleContext } from "@/lib/cycleServer";
 
 export default async function WorkoutsPage() {
   const supabase = await createClient();
@@ -68,6 +71,21 @@ export default async function WorkoutsPage() {
     }
   }
 
+  // The suggestion is phrased against a real number the user has lifted, so
+  // pick their heaviest recent set as the example.
+  const heaviest = (recentSetRows ?? []).reduce<{ name: string; weightKg: number } | null>(
+    (best, row) =>
+      row.weight_kg > (best?.weightKg ?? 0)
+        ? { name: row.exercise_name, weightKg: row.weight_kg }
+        : best,
+    null,
+  );
+
+  const cycle = isEligible(profile.sex, profile.plan)
+    ? await loadCycleContext(supabase, user.id, weekDates[new Date().getDay()])
+    : null;
+  const cycleState = cycle ? cycleStatus(cycle.settings) : null;
+
   const { data: streakRow } = await supabase
     .from("streaks")
     .select("*")
@@ -88,6 +106,16 @@ export default async function WorkoutsPage() {
       weekDates={weekDates}
       avatarUrl={profile.avatar_url}
       dayOffset={profile.day_offset ?? 0}
+      cycle={
+        cycleState && !cycleState.stale
+          ? {
+              phase: cycleState.phase,
+              cycleDay: cycleState.cycleDay,
+              adaptation: adaptForCycle(cycleState.phase, cycle!.checkIn),
+              reference: heaviest,
+            }
+          : null
+      }
     />
   );
 }

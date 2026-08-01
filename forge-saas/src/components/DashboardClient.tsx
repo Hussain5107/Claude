@@ -16,6 +16,9 @@ import {
 } from "@/app/dashboard/actions";
 import { PrepList, CardioCard } from "./SessionExtras";
 import NutritionToast from "./NutritionToast";
+import CycleBanner from "./CycleBanner";
+import type { CyclePhase } from "@/lib/cycle";
+import type { Adaptation } from "@/lib/cycleAdaptation";
 import { weekdayToDayNumber } from "@/lib/dayRotation";
 import { cardioPlan } from "@/lib/cardio";
 
@@ -44,6 +47,13 @@ interface Props {
   weekDates: string[]; // 7 ISO dates, index 0 = Sunday
   avatarUrl: string | null;
   dayOffset: number;
+  /** Null unless cycle tracking is on, set up, and current. */
+  cycle: {
+    phase: CyclePhase;
+    cycleDay: number;
+    adaptation: Adaptation;
+    reference: { name: string; weightKg: number } | null;
+  } | null;
 }
 
 const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -58,6 +68,7 @@ export default function DashboardClient({
   weekDates,
   avatarUrl,
   dayOffset,
+  cycle,
 }: Props) {
   const router = useRouter();
   const today = new Date();
@@ -257,6 +268,17 @@ export default function DashboardClient({
         </div>
       ) : (
         <>
+          {cycle && selectedIndex === today.getDay() && (
+            <div className="mt-5">
+              <CycleBanner
+                phase={cycle.phase}
+                cycleDay={cycle.cycleDay}
+                adaptation={cycle.adaptation}
+                reference={cycle.reference}
+              />
+            </div>
+          )}
+
           {/* Session header card — the mobile equivalent of a screen title. */}
           <div className="glass mt-5 mb-5 rounded-[18px] border border-[var(--border)] p-5">
             <div className="flex items-start justify-between gap-3">

@@ -412,3 +412,76 @@ alter table public.profiles add column if not exists theme text not null default
 alter table public.profiles drop constraint if exists profiles_theme_check;
 alter table public.profiles add constraint profiles_theme_check
   check (theme in ('forge', 'blue', 'pink'));
+
+-- 17. CYCLE TRACKING -----------------------------------------------------------
+-- Optional, opt-in, and private to the user who entered it.
+--
+-- Two tables rather than columns on `profiles`: this is health information, and
+-- keeping it separate means it can be deleted outright (a single delete of the
+-- row) without touching the account. Nothing here is ever aggregated into the
+-- public review_stats view or any other shared surface.
+
+create table if not exists public.cycle_settings (
+  user_id uuid primary key references public.profiles (id) on delete cascade,
+  enabled boolean not null default false,
+  last_period_start date,
+  average_cycle_length int not null default 28 check (average_cycle_length between 20 and 45),
+  period_duration int not null default 5 check (period_duration between 1 and 10),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.cycle_settings enable row level security;
+
+drop policy if exists "cycle_settings: select own" on public.cycle_settings;
+create policy "cycle_settings: select own" on public.cycle_settings
+  for select using (auth.uid() = user_id);
+
+drop policy if exists "cycle_settings: insert own" on public.cycle_settings;
+create policy "cycle_settings: insert own" on public.cycle_settings
+  for insert with check (auth.uid() = user_id);
+
+drop policy if exists "cycle_settings: update own" on public.cycle_settings;
+create policy "cycle_settings: update own" on public.cycle_settings
+  for update using (auth.uid() = user_id);
+
+-- Deleting is part of the feature, not an admin task: "turn this off and erase
+-- what I entered" has to be something the user can actually do.
+drop policy if exists "cycle_settings: delete own" on public.cycle_settings;
+create policy "cycle_settings: delete own" on public.cycle_settings
+  for delete using (auth.uid() = user_id);
+
+-- One optional check-in per day: how the user feels, in their own words as far
+-- as the app is concerned. Used only to soften or restore today's suggestion.
+
+create table if not exists public.cycle_checkins (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  log_date date not null,
+  energy text check (energy in ('low', 'medium', 'high')),
+  symptoms text[] not null default '{}',
+  -- 'follow' takes the suggestion, 'push' means the user has decided to train
+  -- as normal today. Their call always wins over the calculated phase.
+  override text check (override in ('follow', 'push')),
+  logged_at timestamptz not null default now(),
+  unique (user_id, log_date)
+);
+
+alter table public.cycle_checkins enable row level security;
+
+drop policy if exists "cycle_checkins: select own" on public.cycle_checkins;
+create policy "cycle_checkins: select own" on public.cycle_checkins
+  for select using (auth.uid() = user_id);
+
+drop policy if exists "cycle_checkins: insert own" on public.cycle_checkins;
+create policy "cycle_checkins: insert own" on public.cycle_checkins
+  for insert with check (auth.uid() = user_id);
+
+drop policy if exists "cycle_checkins: update own" on public.cycle_checkins;
+create policy "cycle_checkins: update own" on public.cycle_checkins
+  for update using (auth.uid() = user_id);
+
+drop policy if exists "cycle_checkins: delete own" on public.cycle_checkins;
+create policy "cycle_checkins: delete own" on public.cycle_checkins
+  for delete using (auth.uid() = user_id);
+
+create index if not exists cycle_checkins_user_date_idx on public.cycle_checkins (user_id, log_date);

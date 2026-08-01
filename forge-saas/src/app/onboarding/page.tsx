@@ -6,6 +6,7 @@ import { Button, Card, ErrorText, Input, Label, Select } from "@/components/ui";
 import { Logo } from "@/components/Logo";
 import ThemePicker from "@/components/ThemePicker";
 import { suggestedTheme, type ThemeName } from "@/lib/theme";
+import { DEFAULT_CYCLE_LENGTH, DEFAULT_PERIOD_DURATION } from "@/lib/cycle";
 
 const initialState: OnboardingState = {};
 
@@ -28,8 +29,16 @@ export default function OnboardingPage() {
   const [theme, setTheme] = useState<ThemeName>("forge");
   const [themePicked, setThemePicked] = useState(false);
 
-  function handleSexChange(sex: string) {
-    if (!themePicked) setTheme(suggestedTheme(sex));
+  // Cycle tracking is offered to female users only, and is entirely optional —
+  // "not now" is a first-class answer and everything below can be filled in
+  // later from Settings instead.
+  const [sex, setSex] = useState("");
+  const [cycleTracking, setCycleTracking] = useState(false);
+
+  function handleSexChange(next: string) {
+    setSex(next);
+    if (next !== "female") setCycleTracking(false);
+    if (!themePicked) setTheme(suggestedTheme(next));
   }
 
   function handleThemeChange(next: ThemeName) {
@@ -170,6 +179,71 @@ export default function OnboardingPage() {
               {DAY_CHOICES.find((c) => c.days === daysPerWeek)?.detail}
             </p>
           </div>
+
+          {sex === "female" && (
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+              <Label>Would you like FORGE to adapt your workouts to your cycle?</Label>
+              <input type="hidden" name="cycleTracking" value={cycleTracking ? "yes" : "no"} />
+              <div className="grid grid-cols-2 gap-3">
+                <LocationOption
+                  label="Yes, adapt them"
+                  active={cycleTracking}
+                  onClick={() => setCycleTracking(true)}
+                />
+                <LocationOption
+                  label="No, keep it standard"
+                  active={!cycleTracking}
+                  onClick={() => setCycleTracking(false)}
+                />
+              </div>
+              <p className="mt-1.5 text-xs text-[var(--text-faint)]">
+                It suggests how heavy to go based on where you are in your cycle, and lets you log
+                how you feel each day. It never takes a session away. Private to you, and you can
+                turn it on or off any time.
+              </p>
+
+              {cycleTracking && (
+                <div className="mt-4 flex flex-col gap-4">
+                  <div>
+                    <Label htmlFor="lastPeriodStart">First day of your last period</Label>
+                    <Input
+                      id="lastPeriodStart"
+                      name="lastPeriodStart"
+                      type="date"
+                      max={new Date().toISOString().slice(0, 10)}
+                    />
+                    <p className="mt-1 text-xs text-[var(--text-faint)]">
+                      You can skip this and add it later — nothing is calculated until it&apos;s set.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="cycleLength">Cycle length (days)</Label>
+                      <Input
+                        id="cycleLength"
+                        name="cycleLength"
+                        type="number"
+                        min={20}
+                        max={45}
+                        defaultValue={DEFAULT_CYCLE_LENGTH}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="periodDuration">Period length (days)</Label>
+                      <Input
+                        id="periodDuration"
+                        name="periodDuration"
+                        type="number"
+                        min={1}
+                        max={10}
+                        defaultValue={DEFAULT_PERIOD_DURATION}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div>
             <Label>Your look</Label>

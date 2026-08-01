@@ -7,6 +7,9 @@ import type { Goal, NutritionTargets } from "@/lib/exercises/types";
 import { logIntake } from "@/app/dashboard/actions";
 import { isBirthdayToday } from "@/lib/dates";
 import type { ProgressionStatus } from "@/lib/progression";
+import type { CycleStatus } from "@/lib/cycle";
+import type { CheckIn } from "@/lib/cycleAdaptation";
+import CycleCard from "./CycleCard";
 import InstallAppPrompt from "./InstallAppPrompt";
 import ReviewPrompt from "./ReviewPrompt";
 import LevelUpPrompt from "./LevelUpPrompt";
@@ -43,6 +46,11 @@ interface Props {
   accountCreatedAt: string;
   alreadyReviewed: boolean;
   progression: ProgressionStatus;
+  /** Null unless the user has cycle tracking on with a start date entered. */
+  cycle: { status: CycleStatus; checkIn: CheckIn | null; cycleLength: number } | null;
+  /** Whether the feature is offered to this account at all. */
+  cycleEligible: boolean;
+  cycleEnabled: boolean;
 }
 
 const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -69,6 +77,9 @@ export default function HomeClient({
   accountCreatedAt,
   alreadyReviewed,
   progression,
+  cycle,
+  cycleEligible,
+  cycleEnabled,
 }: Props) {
   const [water, setWater] = useState(waterMl);
   const [protein, setProtein] = useState(proteinG);
@@ -231,6 +242,28 @@ export default function HomeClient({
             See the week →
           </Link>
         </div>
+      )}
+
+      {cycle && (
+        <CycleCard
+          status={cycle.status}
+          checkIn={cycle.checkIn}
+          todayIso={todayIso}
+          cycleLength={cycle.cycleLength}
+        />
+      )}
+
+      {cycleEligible && !cycleEnabled && (
+        <Link
+          href="/dashboard/settings"
+          className="glass mt-4 block rounded-[22px] border border-[var(--border)] p-4 transition active:scale-[0.99]"
+        >
+          <div className="text-sm font-bold">🌸 Cycle-adaptive training</div>
+          <p className="mt-1 text-xs text-[var(--text-dim)]">
+            Optional: get load suggestions that follow your cycle, and log how you feel each day.
+            Private to you, and it never removes a session. Turn it on in Profile →
+          </p>
+        </Link>
       )}
 
       {/* Rings: session progress plus the two things you log by hand. */}
