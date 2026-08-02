@@ -116,26 +116,34 @@ test.describe.serial("adult regression", () => {
   test("7. changing theme to Blue changes the primary colour across tabs", async () => {
     await page.goto("/dashboard/settings");
 
-    const themeBefore = await page.evaluate(() =>
-      getComputedStyle(document.documentElement).getPropertyValue("--primary").trim(),
-    );
+    const readPrimary = () =>
+      page.evaluate(() =>
+        getComputedStyle(document.documentElement).getPropertyValue("--primary").trim(),
+      );
 
+    const themeBefore = await readPrimary();
+
+    // handleThemeChange (src/components/SettingsClient.tsx) does a Supabase
+    // write, revalidatePath("/dashboard", "layout"), and router.refresh() —
+    // then the layout re-renders and finally --primary changes. On a cold CI
+    // Next.js instance that's genuinely more than a second; the first version
+    // of this test used waitForTimeout(1000) and flaked for that reason
+    // (Adult Mode wasn't broken — the test's clock was wrong). Poll for the
+    // condition instead.
     await page.getByRole("button", { name: "Blue" }).click();
-    await page.waitForTimeout(1000);
+    await expect
+      .poll(readPrimary, { timeout: 15_000, message: "theme did not repaint after clicking Blue" })
+      .not.toBe(themeBefore);
 
-    const themeAfterOnSettings = await page.evaluate(() =>
-      getComputedStyle(document.documentElement).getPropertyValue("--primary").trim(),
-    );
-    expect(themeAfterOnSettings).not.toBe(themeBefore);
-    expect(themeAfterOnSettings.toLowerCase()).toContain("59"); // #3b82f6 -> rgb(59,...)
+    const themeAfterOnSettings = await readPrimary();
+    expect(themeAfterOnSettings.toLowerCase()).toContain("#3b82f6");
 
     // Same colour on a completely different tab — proves it's applied at the
     // shell layout, not just locally on the settings screen.
     await page.goto("/dashboard");
-    const themeOnHome = await page.evaluate(() =>
-      getComputedStyle(document.documentElement).getPropertyValue("--primary").trim(),
-    );
-    expect(themeOnHome).toBe(themeAfterOnSettings);
+    await expect
+      .poll(readPrimary, { timeout: 5_000 })
+      .toBe(themeAfterOnSettings);
   });
 
   test("1. log out returns to the landing page, not an error page", async () => {

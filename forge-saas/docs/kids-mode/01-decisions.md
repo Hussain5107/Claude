@@ -640,3 +640,28 @@ was quietly relying on behaviour Playwright doesn't provide.
 **Rollback:** N/A — same reasoning as E-012, this is a correctness fix to the test's
 own harness.
 
+---
+
+## E-014 — Theme test: poll for the repaint, and match the hex the app actually writes
+
+**Decided.** With E-013's shared-page fix in place, the Playwright run got through
+nine specs and failed on the theme-switching one. `Expected: not "#8b5cf6"` — the
+`--primary` after clicking Blue was still the FORGE purple, one second later.
+
+**Two things wrong, both in the test, neither in Adult Mode.** First, the click
+triggers `handleThemeChange` in `src/components/SettingsClient.tsx`, which does a
+Supabase write, then `revalidatePath("/dashboard", "layout")`, then
+`router.refresh()` — the CSS variables only change after the fresh layout hydrates.
+A hardcoded `waitForTimeout(1000)` isn't wide enough for that on a cold CI runner;
+the test should poll for the actual condition. Second, the sanity assertion
+`.toContain("59")` was written assuming the browser would report `--primary` as
+`rgb(59, 130, 246)`, but the theme record stores raw hex (`#3b82f6`) and
+`getComputedStyle` reads it back unchanged — so the assertion checked for the wrong
+string entirely and would have failed even with a correct repaint.
+
+**Fix.** `e2e/adult-regression.spec.ts` now uses `expect.poll` with a 15-second
+budget for the settings-page repaint and 5 seconds for the cross-tab check, and
+asserts on the actual hex (`#3b82f6`) the app writes.
+
+**Rollback:** N/A — correctness fix to the test.
+
