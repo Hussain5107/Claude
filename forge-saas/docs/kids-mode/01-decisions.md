@@ -697,3 +697,27 @@ exactly the argument for running verifications for real.
 
 **Rollback:** N/A — correctness fix to the test.
 
+---
+
+## E-016 — `toHaveURL("/")` compared against baseURL, but sign-out lands on localhost
+
+**Decided.** Run 7 got the theme test to green — 10 of 11 specs passed — and failed
+on the last remaining one, the log-out spec. The `waitForResponse` check confirmed
+the GET to `/` returned 200 (the bug the spec was written to catch was still fixed),
+but then `expect(page).toHaveURL("/")` failed with "unexpected value
+http://localhost:3000/".
+
+**Root cause.** Playwright's `toHaveURL(string)` resolves the argument against
+`baseURL`, which this suite sets to `http://127.0.0.1:3000` in `playwright.config.ts`.
+The workflow starts the app with `npx next start -p 3000`, which advertises itself as
+`http://localhost:3000`. The sign-out server response's `Location` header uses that
+form, so after the redirect `page.url()` is `http://localhost:3000/` — same page,
+same pathname, different hostname string. The comparison was hostname-strict; it
+should have been pathname-only.
+
+**Fix.** The last assertion now polls `new URL(page.url()).pathname` and checks it
+equals `"/"`. The response-status check on the same request is unchanged and remains
+the primary evidence the 405 bug stays fixed.
+
+**Rollback:** N/A — correctness fix to the test.
+

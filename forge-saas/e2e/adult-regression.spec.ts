@@ -163,7 +163,14 @@ test.describe.serial("adult regression", () => {
       page.getByRole("button", { name: /log out/i }).click(),
     ]);
     expect(response.status()).toBe(200);
-    await expect(page).toHaveURL("/");
+    // Compare by pathname, not full URL: `next start -p 3000` advertises the
+    // server as http://localhost:3000, so the sign-out redirect lands there
+    // even though this test's baseURL is http://127.0.0.1:3000. Same page,
+    // same pathname, different hostname string — toHaveURL("/") does a full-URL
+    // match against baseURL and would spuriously fail on the host mismatch.
+    await expect
+      .poll(() => new URL(page.url()).pathname, { timeout: 5_000 })
+      .toBe("/");
   });
 
   test("1. /dashboard redirects to /login again after logging out", async () => {
