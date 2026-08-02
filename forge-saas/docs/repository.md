@@ -54,7 +54,8 @@ This is recorded as Audit §12 R3 (High) and as Phase 0 task 0.1 in
 
 ## Verifying the two are in sync
 
-They were last verified identical at `forge-saas` commit `24b4b7f`. To re-check:
+They were last verified identical (app subtree, byte-for-byte) at `forge-saas` commit
+`37d437f`. To re-check:
 
 ```bash
 # from a clone of each, compare the app subtree
