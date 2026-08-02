@@ -432,6 +432,21 @@ which is worse than no signal at all.
 **Rollback:** delete `.github/workflows/ci.yml` from the canonical repo. Nothing
 depends on it existing.
 
+**Scope correction, added after the fact:** this decision covers the workflow file
+specifically, not "nothing from Phase 0 goes to the archive." An earlier draft of
+the completion report over-applied it — treating the archive as receiving zero
+Phase 0 content and leaving 21 files uncommitted there — until a stop-hook flagged
+the uncommitted state. On reflection that was overcorrection: the actual risk this
+document exists to prevent (Vercel deploying stale code because the *canonical*
+repo fell behind) is fully covered as long as canonical receives every change
+first, which it did (`77fb7a2`, pushed before the archive mirror). Pushing the same
+content to the archive afterward as a synced mirror doesn't reintroduce that risk —
+it just keeps the historical record from silently rotting while it still exists.
+The archive now mirrors the app-level Phase 0 work at `29d16cf`. The CI workflow
+itself stays canonical-only, because unlike the rest of the change it would be
+inert there regardless (Actions don't fire meaningfully against a repo Vercel
+never reads), so mirroring it would be dead weight rather than continuity.
+
 ---
 
 ## E-007 — `next build` is not part of the Phase 0 CI job
