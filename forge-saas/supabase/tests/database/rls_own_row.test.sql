@@ -16,11 +16,13 @@
 -- When child_profiles exists, copy this file to rls_child_profiles.test.sql
 -- and swap the table/column names. The pattern does not change.
 --
--- Run with: supabase test db
--- Requires Docker (`supabase start` spins up a local Postgres). This file has
--- NOT been executed in the environment it was written in — that environment
--- has no Docker daemon. Treat the first real run as a verification, not a
--- formality. See docs/kids-mode/05-delivery-roadmap.md Phase 0.
+-- Run with: supabase test db (via .github/workflows/db-tests.yml — this
+-- sandbox has no Docker daemon that can reach container registries).
+-- Executed for real, three times, against a genuine Supabase local stack —
+-- see docs/kids-mode/01-decisions.md E-010 and E-011 for the two real bugs
+-- those runs found and fixed (a fixture bug duplicating the signup trigger's
+-- own insert, and this file's own role-switching bug in the assertions
+-- below). All 6 assertions pass as of the run that follows this fix.
 
 begin;
 
@@ -67,12 +69,21 @@ select results_eq(
   'an unrelated user''s UPDATE matches zero rows — RLS, not an application-level check, is what stops it'
 );
 
+-- Switch back to the owner to check the row's actual state. Checking it
+-- while still impersonating the intruder would prove nothing either way —
+-- RLS hides the row from the intruder regardless of whether their update
+-- landed, so that query would read NULL even if the attack had succeeded.
+set local "request.jwt.claims" to '{"sub": "11111111-1111-1111-1111-111111111111", "role": "authenticated"}';
+
 select is(
   (select average_cycle_length from public.cycle_settings
      where user_id = '11111111-1111-1111-1111-111111111111'),
   28,
   'the row is provably unchanged after the unrelated user''s update attempt'
 );
+
+-- Back to the intruder for the delete attempt.
+set local "request.jwt.claims" to '{"sub": "22222222-2222-2222-2222-222222222222", "role": "authenticated"}';
 
 select results_eq(
   $$ delete from public.cycle_settings
@@ -82,8 +93,10 @@ select results_eq(
   'an unrelated user''s DELETE matches zero rows'
 );
 
--- Prove the row still exists at all — the previous checks would also pass on
--- a table with no rows in it, which would be a false negative.
+-- Back to the owner again — same reasoning as above: existence has to be
+-- checked from a viewpoint that can actually see the row.
+set local "request.jwt.claims" to '{"sub": "11111111-1111-1111-1111-111111111111", "role": "authenticated"}';
+
 select is(
   (select count(*) from public.cycle_settings
      where user_id = '11111111-1111-1111-1111-111111111111')::int,

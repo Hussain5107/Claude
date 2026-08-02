@@ -583,3 +583,34 @@ inherits it too. This is local-test-only plumbing, not a schema change.
 **Rollback:** delete the "Grant table privileges" step from `db-tests.yml`. No adult
 code or production schema was touched.
 
+---
+
+## E-012 — pgTAP test's own role-switching bug, found by the grants fix working
+
+**Decided.** The run that verified E-011's fix (grants) got further than any previous
+run — insert, the intruder's blocked SELECT, and the intruder's blocked UPDATE all
+passed — and then failed on two different assertions: "the row is provably unchanged
+after the update attempt" (`have: NULL, want: 28`) and "the owner's row survived"
+(`have: 0, want: 1`).
+
+**Root cause.** Not RLS, not grants — the test file itself. After becoming the
+unrelated "intruder" user to attempt the blocked UPDATE, the script never switched the
+session back to the owner before checking whether the row had actually survived
+unchanged. Querying the row's state while still impersonating the intruder always
+returns nothing, because RLS correctly hides the row from the intruder — regardless of
+whether the earlier attack had succeeded or failed. As written, those two assertions
+could never have passed even with perfectly correct RLS; they were checking from a
+viewpoint that structurally cannot see the answer.
+
+**Fix.** `supabase/tests/database/rls_own_row.test.sql` now switches
+`request.jwt.claims` back to the owner immediately before each state-verification
+query, and back to the intruder before each attack attempt. Six real, independently
+meaningful assertions now run in sequence: owner inserts; intruder can't SELECT;
+intruder's UPDATE matches zero rows; owner confirms the value is still 28; intruder's
+DELETE matches zero rows; owner confirms the row still exists. This is the third real
+bug this verification effort has found by actually executing against a real Postgres
+session rather than trusting the file was correct because it was written carefully —
+see E-010 and E-011 for the other two.
+
+**Rollback:** N/A — a correctness fix to the test's own logic, not a new mechanism.
+
