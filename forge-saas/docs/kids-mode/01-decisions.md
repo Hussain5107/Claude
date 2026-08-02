@@ -614,3 +614,29 @@ see E-010 and E-011 for the other two.
 
 **Rollback:** N/A — a correctness fix to the test's own logic, not a new mechanism.
 
+---
+
+## E-013 — Playwright serial block shares a page, not a context
+
+**Decided.** The first real run of the Playwright suite got past pgTAP, past build,
+past Chromium install, and then failed on the fourth spec: `page.selectOption("#sex",
+"female")` timed out for 30 seconds because `/onboarding` never rendered the form.
+
+**Root cause.** `test.describe.serial(...)` guarantees ordering — later specs don't
+start until earlier ones finish — but each `test(...)` still receives its own fresh
+browser context and its own fresh `page` from Playwright's default fixtures. The
+signup spec created a session in one context; the next spec asked for `/onboarding` in
+a completely different, cookie-less context, which the middleware correctly redirected
+back to `/login`, which does not contain `#sex`. As written, "continues the same
+signed-in session from the previous test" (the comment on the failing spec) was
+wishful thinking — the sessions were never shared.
+
+**Fix.** `e2e/adult-regression.spec.ts` now uses one `page` created in `beforeAll` and
+reused by every spec in the block. Every spec dropped its `{ page }` fixture parameter
+and reads the outer variable instead. All ten specs after signup depend on being
+signed in, so this matches what the suite was always trying to do; the previous shape
+was quietly relying on behaviour Playwright doesn't provide.
+
+**Rollback:** N/A — same reasoning as E-012, this is a correctness fix to the test's
+own harness.
+

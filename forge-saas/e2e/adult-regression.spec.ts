@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
 /**
  * Browser-driven pass of docs/kids-mode/06-adult-regression-checklist.md.
@@ -20,18 +20,35 @@ const email = `e2e-${runId}@example.invalid`;
 const password = "correct horse battery staple 1";
 
 test.describe.serial("adult regression", () => {
-  test("1. landing page renders signed out", async ({ page }) => {
+  // A serial block does NOT share cookies between tests by default — each
+  // `test(...)` gets its own fresh page/context from the `page` fixture, so a
+  // session established in one test is gone by the next. Proven the hard way:
+  // the first real run of this suite got through signup, then timed out 30s
+  // waiting for "#sex" on /onboarding, because that request was signed out and
+  // never rendered the form. One page, opened once and reused for the whole
+  // block, is what actually carries the session across tests.
+  let page: Page;
+
+  test.beforeAll(async ({ browser }) => {
+    page = await browser.newPage();
+  });
+
+  test.afterAll(async () => {
+    await page.close();
+  });
+
+  test("1. landing page renders signed out", async () => {
     await page.goto("/");
     await expect(page.locator("body")).toBeVisible();
     await expect(page.locator("text=FORGE").first()).toBeVisible();
   });
 
-  test("1. /dashboard redirects to /login when signed out", async ({ page }) => {
+  test("1. /dashboard redirects to /login when signed out", async () => {
     await page.goto("/dashboard");
     await expect(page).toHaveURL(/\/login/);
   });
 
-  test("2. sign up lands on onboarding", async ({ page }) => {
+  test("2. sign up lands on onboarding", async () => {
     await page.goto("/signup");
     await page.fill("#email", email);
     await page.fill("#password", password);
@@ -39,7 +56,7 @@ test.describe.serial("adult regression", () => {
     await expect(page).toHaveURL(/\/onboarding/, { timeout: 15_000 });
   });
 
-  test("2. picking Female shows the cycle-tracking question; Male hides it", async ({ page }) => {
+  test("2. picking Female shows the cycle-tracking question; Male hides it", async () => {
     // Continues the same signed-in session from the previous test.
     await page.goto("/onboarding");
     await page.selectOption("#sex", "female");
@@ -53,7 +70,7 @@ test.describe.serial("adult regression", () => {
     await page.selectOption("#sex", "female");
   });
 
-  test("2. completing onboarding generates a program and lands on Home", async ({ page }) => {
+  test("2. completing onboarding generates a program and lands on Home", async () => {
     await page.fill("#age", "28");
     await page.fill("#heightCm", "170");
     await page.fill("#weightKg", "65");
@@ -63,14 +80,14 @@ test.describe.serial("adult regression", () => {
     await expect(page).toHaveURL(/\/dashboard$/, { timeout: 20_000 });
   });
 
-  test("3. Home shows the greeting, avatar initial, and today's plan", async ({ page }) => {
+  test("3. Home shows the greeting, avatar initial, and today's plan", async () => {
     await page.goto("/dashboard");
     // No display name was set at onboarding, so this proves the email
     // fallback (src/lib/displayName.ts) actually renders, not just compiles.
     await expect(page.getByText(/good morning|good afternoon|good evening/i)).toBeVisible();
   });
 
-  test("8. bottom tab bar shows exactly five adult tabs", async ({ page }) => {
+  test("8. bottom tab bar shows exactly five adult tabs", async () => {
     await page.goto("/dashboard");
     const tabs = page.locator("nav a");
     await expect(tabs).toHaveCount(5);
@@ -79,12 +96,12 @@ test.describe.serial("adult regression", () => {
     }
   });
 
-  test("4. Workouts tab renders a day strip", async ({ page }) => {
+  test("4. Workouts tab renders a day strip", async () => {
     await page.goto("/dashboard/workouts");
     await expect(page.getByText(/days a week/i)).toBeVisible();
   });
 
-  test("7. changing display name on Settings is reflected on Home", async ({ page }) => {
+  test("7. changing display name on Settings is reflected on Home", async () => {
     await page.goto("/dashboard/settings");
     const nameField = page.locator("#displayName");
     await nameField.fill("E2E Regression");
@@ -96,7 +113,7 @@ test.describe.serial("adult regression", () => {
     await expect(page.getByText("E2E Regression")).toBeVisible({ timeout: 10_000 });
   });
 
-  test("7. changing theme to Blue changes the primary colour across tabs", async ({ page }) => {
+  test("7. changing theme to Blue changes the primary colour across tabs", async () => {
     await page.goto("/dashboard/settings");
 
     const themeBefore = await page.evaluate(() =>
@@ -121,7 +138,7 @@ test.describe.serial("adult regression", () => {
     expect(themeOnHome).toBe(themeAfterOnSettings);
   });
 
-  test("1. log out returns to the landing page, not an error page", async ({ page }) => {
+  test("1. log out returns to the landing page, not an error page", async () => {
     await page.goto("/dashboard/settings");
     // This is the exact bug fixed earlier: a POST /auth/signout that redirected
     // with a 307 got re-POSTed against "/", which returned 405. Assert on the
@@ -134,7 +151,7 @@ test.describe.serial("adult regression", () => {
     await expect(page).toHaveURL("/");
   });
 
-  test("1. /dashboard redirects to /login again after logging out", async ({ page }) => {
+  test("1. /dashboard redirects to /login again after logging out", async () => {
     await page.goto("/dashboard");
     await expect(page).toHaveURL(/\/login/);
   });
