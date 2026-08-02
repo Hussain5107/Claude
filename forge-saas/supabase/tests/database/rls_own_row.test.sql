@@ -28,15 +28,15 @@ create extension if not exists pgtap with schema extensions;
 
 select plan(6);
 
--- Two users, standing in for two unrelated parents.
+-- Two users, standing in for two unrelated parents. Their public.profiles
+-- rows are NOT inserted here — schema.sql's on_auth_user_created trigger
+-- (section 1, handle_new_user) fires on this insert and creates them
+-- automatically, exactly as it does for a real signup. Inserting them by hand
+-- as well duplicates the trigger's own insert and fails on the primary key —
+-- confirmed the hard way running this for real against a genuine Supabase
+-- auth.users table (the trigger doesn't exist on a bare pgTAP rehearsal
+-- rig without it, which is why this went unnoticed until then).
 insert into auth.users (id, email) values
-  ('11111111-1111-1111-1111-111111111111', 'owner@example.test'),
-  ('22222222-2222-2222-2222-222222222222', 'intruder@example.test');
-
--- profiles is populated by a trigger on auth.users in production
--- (handle_new_user, supabase/schema.sql section 1). Insert directly here since
--- pgTAP tests don't go through Supabase Auth signup.
-insert into public.profiles (id, email) values
   ('11111111-1111-1111-1111-111111111111', 'owner@example.test'),
   ('22222222-2222-2222-2222-222222222222', 'intruder@example.test');
 

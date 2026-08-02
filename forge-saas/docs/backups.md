@@ -86,9 +86,16 @@ cycle-tracking entries — which is health data about identifiable people.
 
 ## Restoring — read before you need it
 
-Restoring is not a one-liner, and **this procedure has not been rehearsed.** An
-unrehearsed restore is a plan, not a guarantee. Rehearsing it once against a throwaway
-Supabase project is the single highest-value thing that could be done with these files.
+**Rehearsed once, end to end, against a real PostgreSQL 16 instance** — not a real
+Supabase project (this environment can't reach Supabase), but the actual `pg_dump` /
+`gzip` / restore commands, the actual `schema.sql`, and synthetic data standing in for
+a real user. Full run: applied `schema.sql` in full (all 14 relations, all 41 RLS
+policies — matches the audit exactly), seeded one obviously-fake profile plus a streak
+and a workout set, ran the exact `pg_dump` command `scripts/backup-db.sh` uses, gzipped
+it, restored the gzip into a second, completely separate database, and confirmed every
+row came back identical and RLS still filtered correctly (a stranger's JWT saw 0 rows;
+the seeded user's JWT saw exactly 1). Torn down immediately after — no synthetic data,
+databases, or files were left behind.
 
 Rough shape:
 
@@ -96,14 +103,41 @@ Rough shape:
 gunzip -c backups/forge-YYYY-MM-DD-HHMM.sql.gz | psql "$TARGET_DB_URL"
 ```
 
-Things that will bite:
+**One real step the rehearsal found that the shape above glosses over:** the target
+database's `public` schema already exists (Postgres creates every new database with an
+empty one), and the dump's own `CREATE SCHEMA "public"` statement collides with it.
+Before restoring:
 
-- Restoring into a project that already has data will conflict. A restore usually means
-  a fresh project.
-- A fresh project means a new project URL and new API keys → Vercel environment
-  variables must be updated.
+```sql
+drop schema public cascade;
+```
+
+Without this, the restore fails immediately on the very first `CREATE SCHEMA` — it
+doesn't corrupt anything, but it does mean the rough shape above does not work as
+written. **Predicted, not confirmed, for a real Supabase project specifically:** every
+Postgres database creates schemas this way, so the same conflict should occur there
+too — but this hasn't been run against actual Supabase infrastructure, only against
+plain PostgreSQL 16, so treat this one line as a strong hint, not a guarantee.
+
+**A second real finding:** `scripts/backup-db.sh` passes `--no-privileges` to
+`pg_dump`, which is correct — the dump shouldn't be trying to recreate Supabase's own
+role setup — but it means the dump contains **no** `GRANT` statements at all, including
+the schema- and table-level access that lets the `authenticated` and `anon` roles read
+anything. On a real, fresh Supabase project this is a non-issue: Supabase's platform
+provisions those grants automatically for every new project, independent of anything in
+`schema.sql`. It only became visible in this rehearsal because the test rig was raw
+Postgres with no such platform behind it, and had to be given `grant select, insert,
+update, delete on all tables in schema public to authenticated` (and `select` for
+`anon`) by hand before RLS could be exercised at all. Worth knowing regardless: if a
+restore ever *doesn't* land inside a fresh Supabase project (some other Postgres target),
+those grants will need to be added by hand, or nothing will be readable no matter how
+correct the RLS policies are.
+
+Other things that will bite, not yet rehearsed:
+
+- A fresh Supabase project means a new project URL and new API keys → Vercel
+  environment variables must be updated.
 - Storage bucket contents are not in the dump (see above).
-- Supabase-managed roles and extensions may need to exist before the restore runs.
 
 ---
 
@@ -125,10 +159,20 @@ restricted access — and that is a decision with a cost attached, not a script.
 ## Honest limitations
 
 1. **Manual.** If nobody runs it, there is no backup.
-2. **Unrehearsed restore.** See above.
+2. **Rehearsed against plain PostgreSQL, not real Supabase.** The dump/restore/RLS
+   mechanics are now genuinely proven — see "Restoring" above — but always against a
+   local PostgreSQL 16 instance carrying `schema.sql`, never against an actual Supabase
+   project, because this environment cannot reach Supabase's network at all (confirmed:
+   direct connection attempts are rejected by the sandbox's proxy policy). **The one
+   step that still needs a real run: backing up actual production and restoring it into
+   a real, fresh Supabase project.** Do that once, and update this file with what
+   differs, if anything, from the plain-Postgres rehearsal above.
 3. **No storage bucket coverage.** Progress photos and avatars are not backed up.
 4. **No retention policy.** Old dumps accumulate until someone deletes them.
-5. **Not verified from this environment.** The sandbox this script was written in cannot
-   reach Supabase, so it has been syntax-checked and its failure paths tested, but it
-   has never completed a real dump. **The first run should be treated as a test** —
-   check the file size and open the gzip before relying on it.
+5. **The 10KB minimum-size guard was calibrated on a near-empty database.** The
+   rehearsal's single-synthetic-user dump compressed to ~4.6KB — *below* the script's
+   own "too small to be real" threshold, on a database holding real rows across every
+   table. Production, with 15 real user profiles and their accumulated history, is
+   almost certainly comfortably over 10KB compressed — but this wasn't measurable from
+   here, so if the very first real backup gets rejected as "too small," that's why:
+   lower the threshold in `scripts/backup-db.sh`, don't just retry.
