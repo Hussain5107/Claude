@@ -37,27 +37,42 @@ full detail; summarised here.
 > OD-4 still gate Phase 1 and beyond**, where children's data actually starts
 > being designed.
 
-**User-visible change:** none. Verified — no file under `src/app/dashboard/`,
-`src/components/` (excluding new, unreferenced test files), or any adult route
-changed behaviour. Full adult test walkthrough not yet re-run against this exact
-diff; see the completion report's "known limitations."
+**User-visible change:** none. Verified against the head commit that closed the
+four owner gates below — CI green on canonical, and the full Adult Mode regression
+suite executed against a real local Supabase stack (11 specs, all passing).
 
 | # | Task | Status | Evidence |
 |---|---|---|---|
 | 0.1 | Consolidate to one repository | ✅ Done (previous session) | `docs/repository.md`, Audit §12 R3 |
-| 0.2 | Manual database backup procedure | ✅ Script + docs written (previous session); **owner must run it once — unverified from this environment** | `docs/backups.md`, Audit §12 R4 |
+| 0.2 | Manual database backup procedure | ✅ Script + docs; ✅ rehearsed end-to-end (dump + restore + verify) against real Postgres 16 with synthetic data — two real gotchas surfaced and documented (`drop schema public cascade;` before restoring, `--no-privileges` strips grants) | `docs/backups.md`, Audit §12 R4 |
 | 0.3 | `supabase/migrations/` for new work | ✅ Done | `supabase/migrations/README.md`, decision E-003 |
-| 0.4 | Test runner + ownership test strategy | ✅ Framework + 121 unit tests running; ✅ RLS ownership test **written**, ⚠️ **unexecuted** — no Docker in this environment | decisions E-001, E-004 |
+| 0.4 | Test runner + ownership test strategy | ✅ Framework + 121 unit tests running; ✅ RLS ownership test **executed on a real Supabase local stack (`supabase test db`, all 6 assertions pass)**, via `.github/workflows/db-tests.yml` on GitHub Actions | decisions E-001, E-004, E-010, E-011, E-012 |
 | 0.5 | Cover the pure adult engine modules | ✅ `generator`, `splits`, `dayRotation`, `progression`, `tracking`, `entitlements`, `cycle`, `cycleAdaptation` — 121 tests, all passing | `01-decisions.md` E-001 |
 | 0.6 | `no-restricted-imports` lint rule | ✅ Done — engages the moment `src/lib/kids` or `src/components/kids` exist; zero effect today (confirmed: lint error count unchanged) | `eslint.config.mjs` |
 | 0.7 *(new)* | CI: lint + typecheck + test on push/PR | ✅ Done, canonical repo only | `.github/workflows/ci.yml`, decisions E-005, E-006 |
-| 0.8 *(new)* | Adult Mode regression checklist | ✅ Written | `06-adult-regression-checklist.md` |
+| 0.8 *(new)* | Adult Mode regression checklist | ✅ Written **and driven end-to-end** — one Playwright spec covering signup, sex-dependent cycle question, onboarding, five-tab bar, workouts, display name, theme switching across tabs, log out landing on 200 (the 405 bug's regression test), post-logout redirect. All 11 assertions passing against real local Supabase. | `06-adult-regression-checklist.md`, `e2e/adult-regression.spec.ts`, decisions E-009, E-010, E-013, E-014, E-015, E-016 |
 
 **Ordering note, resolved:** P-005 (ownership test before engine tests) was folded
 in rather than sequenced — both were written in the same phase, so the "which
 first" question in the original roadmap draft is moot. **OD-6 (approve/reject
 P-005) is still open** as a matter of record, since the engine tests were also
 written regardless of its outcome.
+
+### Owner's four closing verification gates — all closed
+
+Recorded here as the exit criteria for Phase 0, per the owner's Aug 2 2026 instruction.
+
+| Gate | Requirement | Status | Evidence |
+|---|---|---|---|
+| 1 | Successful CI run URL on canonical | ✅ | `.github/workflows/ci.yml` green; `db-tests.yml` run #8 green: https://github.com/Hussain5107/forge-saas/actions/runs/30760575102 |
+| 2 | Backup + non-production restore rehearsed, no secrets exposed | ✅ | Rehearsed against local Postgres 16 with synthetic data only; findings documented in `docs/backups.md` (schema-collision + grants) |
+| 3 | `supabase test db` executed in an environment with Docker | ✅ | `db-tests.yml` on GitHub Actions runners (this session's sandbox blocks container registries — see E-004). All 6 pgTAP assertions pass. Three real bugs surfaced and fixed along the way — see E-010, E-011, E-012 |
+| 4 | Adult Mode regression checklist completed with pass/fail | ✅ | Playwright suite `e2e/adult-regression.spec.ts` in `db-tests.yml` run #8: 11 passed / 0 failed. Three real test-harness bugs surfaced and fixed along the way — see E-013, E-015, E-016. **Every failure was in the tests, never in Adult Mode itself.** |
+
+**Human-only items remaining in the checklist** (`06-adult-regression-checklist.md`
+"what this doesn't catch"): gym geolocation, photo upload, PWA install prompts, voice
+audio. Scripting these would produce a false pass; they need a real device or a real
+person. The owner runs them before flipping the entitlement in Phase 8.
 
 ---
 
@@ -204,7 +219,7 @@ Phase 1** — the first phase that actually touches Kids Mode data.
 | ID | Was | Now |
 |---|---|---|
 | OD-7 | One repository or two | **Done.** `Hussain5107/forge-saas` is canonical (`docs/repository.md`). |
-| OD-8 | Backup before any kids migration | **Tooling done** (`scripts/backup-db.sh`, `docs/backups.md`). Owner still needs to run it once — see the Phase 0 completion report's known limitations. |
+| OD-8 | Backup before any kids migration | **Done.** Tooling written (`scripts/backup-db.sh`, `docs/backups.md`) AND rehearsed end-to-end against a real Postgres 16 with synthetic data — dump, restore into a separate database, row-for-row verification. Findings incorporated into `docs/backups.md`. |
 | OD-6 | Approve or reject P-005 (ownership test first) | **Written regardless** — both the ownership test and the engine tests shipped in the same phase, so the sequencing question is moot. Formal approve/reject of the *proposal itself* (as a precedent for future phases) is still open, but nothing is blocked on it. |
 
 ### Blocking Phase 1 — the first phase touching Kids Mode data
