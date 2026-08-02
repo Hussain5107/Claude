@@ -116,20 +116,27 @@ test.describe.serial("adult regression", () => {
   test("7. changing theme to Blue changes the primary colour across tabs", async () => {
     await page.goto("/dashboard/settings");
 
+    // --primary is defined at :root as the FORGE default and OVERRIDDEN by
+    // [data-theme="blue"] / [data-theme="pink"] — but that data-theme attribute
+    // lives on <div class="app-shell"> inside the dashboard layout
+    // (src/app/dashboard/layout.tsx:34), NOT on <html>. Reading from
+    // document.documentElement therefore always returns #8b5cf6 no matter what
+    // theme the user picks; the cascade is scoped one layer down. Verified the
+    // hard way when a 15-second poll on document.documentElement never budged.
+    // Read from the element that actually carries the attribute.
     const readPrimary = () =>
-      page.evaluate(() =>
-        getComputedStyle(document.documentElement).getPropertyValue("--primary").trim(),
-      );
+      page.evaluate(() => {
+        const el = document.querySelector("[data-theme]");
+        if (!el) throw new Error("no [data-theme] element on the page");
+        return getComputedStyle(el).getPropertyValue("--primary").trim();
+      });
 
     const themeBefore = await readPrimary();
 
     // handleThemeChange (src/components/SettingsClient.tsx) does a Supabase
     // write, revalidatePath("/dashboard", "layout"), and router.refresh() —
-    // then the layout re-renders and finally --primary changes. On a cold CI
-    // Next.js instance that's genuinely more than a second; the first version
-    // of this test used waitForTimeout(1000) and flaked for that reason
-    // (Adult Mode wasn't broken — the test's clock was wrong). Poll for the
-    // condition instead.
+    // then the layout re-renders and finally --primary changes. Poll for the
+    // condition rather than waiting a fixed interval.
     await page.getByRole("button", { name: "Blue" }).click();
     await expect
       .poll(readPrimary, { timeout: 15_000, message: "theme did not repaint after clicking Blue" })

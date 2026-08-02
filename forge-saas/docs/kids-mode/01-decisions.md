@@ -665,3 +665,35 @@ asserts on the actual hex (`#3b82f6`) the app writes.
 
 **Rollback:** N/A — correctness fix to the test.
 
+---
+
+## E-015 — Theme test read `--primary` from the wrong element (root, not app-shell)
+
+**Decided.** With E-014's polling in place, the 15-second poll timed out — the
+`--primary` value never changed at all. This was the fourth real bug the verification
+found, and the diagnosis in E-014 ("cold CI runner round-trip") turned out to be
+partly wrong: the round-trip WAS slower than 1 second, but a 15-second wait still
+wouldn't have helped, because the reading location was wrong.
+
+**Root cause.** `src/app/globals.css` defines `--primary: #8b5cf6;` on `:root` as the
+FORGE default and overrides it via `[data-theme="blue"] { --primary: #3b82f6; }`. The
+`data-theme` attribute is set on `<div class="app-shell">` inside the dashboard layout
+(`src/app/dashboard/layout.tsx:34`) — deliberately, per the layout comment ("the theme
+is read here, once, and applied as `data-theme` on the wrapper"). So the per-theme
+override only cascades to `.app-shell` and its descendants; `document.documentElement`
+always resolves `--primary` from the `:root` rule (FORGE purple) regardless of user
+theme. The test would have failed forever regardless of timeout — it was reading a
+variable that structurally cannot see the override.
+
+**Fix.** `readPrimary()` now queries `[data-theme]` and reads the computed style from
+that element instead of `document.documentElement`. This matches how the app actually
+scopes the theme.
+
+**Why this wasn't caught by the previous fix.** E-014 shipped a real improvement
+(polling instead of fixed wait, matching real hex instead of rgb notation) that would
+have been necessary anyway — the previous test was wrong on those counts too, they
+just weren't the whole story. Layered bugs; each fix surfaced the next one, which is
+exactly the argument for running verifications for real.
+
+**Rollback:** N/A — correctness fix to the test.
+
