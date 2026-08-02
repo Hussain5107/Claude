@@ -1,15 +1,20 @@
 # 01 — Decision register
 
-Two parts:
+Three parts:
 
 - **Part A — Confirmed direction.** Decisions carried from the audit. Listed so they can
   be challenged deliberately rather than drifted away from.
 - **Part B — Proposals that differ from the audit.** Five places where I believe there
   is a better option *for this repository*. Each is recorded as **requiring approval**.
   The audit recommendation is stated alongside, not replaced.
+- **Part C — Phase 0 engineering decisions.** Tooling and process choices made while
+  building the Phase 0 safety net. These are reversible, do not touch Adult Mode
+  behaviour, and do not involve legal, privacy, vendor-contract, or destructive-data
+  questions — so, per the Decision Rule, they were made and recorded rather than
+  escalated. Challengeable the same as anything else here.
 
 **Nothing in Part B is adopted.** Until the owner approves, the audit recommendation
-stands.
+stands. **Part C is already implemented** — it is Phase 0 itself.
 
 ---
 
@@ -267,3 +272,209 @@ resolved.**
 | **OD-12** | Approve or reject P-002 (derive XP vs ledger) | Owner |
 | **OD-13** | Is a child ever told they lost a streak? Daily XP cap? | Owner, see `02` §6 |
 | **OD-14** | What does the parent see — all activity, or a weekly summary? | Owner, see `02` §5 |
+
+---
+
+# Part C — Phase 0 engineering decisions
+
+Each entry: what was decided, alternatives considered, why, trade-offs, and how to
+undo it.
+
+---
+
+## E-001 — Vitest as the test framework
+
+**Decided.** Node-environment tests only (no jsdom, no React Testing Library yet).
+
+**Alternatives considered:**
+
+| Option | Why not |
+|---|---|
+| Jest | The Next.js 16 App Router docs bundled in this exact install
+(`node_modules/next/dist/docs/01-app/02-guides/testing/`) contain a Vitest guide and
+**no Jest guide**. `AGENTS.md` warns this Next.js version breaks convention against
+training data — the absence of official Jest documentation for this version is treated
+as evidence, not an oversight. |
+| No test framework, keep using throwaway scripts | This is explicitly the debt the audit flagged (`docs/architecture-audit.md` §13: "verified with throwaway scripts that were not kept"). Phase 0 exists to stop doing that. |
+
+**Why:** Vitest is the framework the installed Next.js version itself documents.
+Fast (the full 121-test suite runs in under a second), ESM-native, no Babel
+configuration needed.
+
+**Trade-off:** no component-rendering tests yet. `jsdom` and `@testing-library/react`
+are not installed — nothing in Phase 0 renders a component, so they would be
+speculative weight. Add them in the phase that first needs to test a component,
+not before.
+
+**Rollback:** `npm uninstall vitest`, delete `vitest.config.mts` and every
+`*.test.ts` file. Zero effect on `next build`, `next dev`, or any runtime path —
+these are devDependencies and a `test` script only.
+
+---
+
+## E-002 — Native `resolve.tsconfigPaths`, not the `vite-tsconfig-paths` plugin
+
+**Decided**, and it reverses my own first draft within this same phase.
+
+The Next.js testing guide's example config imports `vite-tsconfig-paths` as a
+plugin. I installed it, wrote the config around it, and ran the suite — Vitest's
+own startup warning said the plugin is superseded by a native
+`resolve.tsconfigPaths: true` option in the Vite version this Vitest pulls in.
+Switched, re-ran (still 121/121 passing), uninstalled the now-unnecessary
+package.
+
+**Why this is recorded rather than silently fixed:** the instructions asked for
+better options to be taken and explained, not just taken. This is the clearest
+example in Phase 0 — a documented recommendation turned out to be one dependency
+heavier than the tool itself now requires, and the fix was to listen to the tool
+rather than the doc snippet.
+
+**Rollback:** revert `vitest.config.mts`, `npm install -D vite-tsconfig-paths`,
+add the plugin back. Never became load-bearing for anything.
+
+---
+
+## E-003 — `supabase/migrations/` for everything new; `schema.sql` frozen
+
+**Decided.** Exactly Audit §21's recommendation, implemented as
+`supabase/migrations/README.md`.
+
+**Alternative considered:** retrofit the existing 18 `schema.sql` sections into
+timestamped migration files. **Rejected** — no ordering guarantee exists for what
+has actually been applied to production, and restructuring working history risks
+breaking a database that currently works, for zero user-visible benefit. Audit §21
+already reached this conclusion; Phase 0 just executes it.
+
+**Not decided, deliberately:** whether to automate applying migrations (the
+`supabase` CLI, now a dev dependency, can run `db push` against a linked project).
+That needs a decision about a shadow database, a service-role secret living in CI,
+and a review gate — real decisions, not a Phase 0 default. Migrations remain a
+manual SQL Editor paste for now, same as `schema.sql` always was.
+
+**Rollback:** delete the `migrations/` folder. `schema.sql` is untouched either
+way — this only affects where *future* SQL is written down.
+
+---
+
+## E-004 — RLS test strategy: pgTAP via the Supabase CLI, proven against an
+**existing** adult table
+
+**Decided.** `supabase/tests/database/rls_own_row.test.sql`.
+
+**Alternatives considered:**
+
+| Option | Why not |
+|---|---|
+| A Node/TypeScript integration test hitting a real Postgres over `pg` | Reinvents what pgTAP already does, and needs its own auth-mocking layer. Supabase's own CLI (`supabase test db`) runs pgTAP tests against a local Postgres for exactly this purpose, and it's already a dev dependency. |
+| Wait until `child_profiles` exists to write any RLS test | Rejected — see P-005 in Part B. RLS is the entire authorization model (Audit §5) and none of the 41 existing policies has ever been exercised by an automated test. Waiting for Kids Mode tables means the *first* RLS test in this codebase's history is also the one carrying the most risk. |
+
+**Why the test targets `cycle_settings`, not a new table:** Phase 0 explicitly
+excludes creating child tables or policies. `cycle_settings` already has the exact
+policy shape a `child_profiles` table will need — all four verbs, own-row via
+`auth.uid()` — so this both respects the Phase 0 boundary and produces a real
+regression test for a real adult table today. The file says explicitly where to
+copy it once `child_profiles` exists.
+
+**Disclosed honestly:** this test has **not been executed**. `supabase test db`
+requires a local Postgres via Docker (`supabase start`), and the Docker daemon is
+not reachable in the environment this was written in (confirmed:
+`docker ps` → "cannot connect to the Docker daemon"). The SQL is written against
+the well-established Supabase pgTAP pattern and against this repository's actual
+schema, but it is unverified in the same way `scripts/backup-db.sh` was unverified
+in the previous phase — the first real run should be treated as a test of the test,
+not a formality.
+
+**Rollback:** delete `supabase/tests/`, `supabase/config.toml`, and
+`npm uninstall supabase`. None of it is referenced by application code.
+
+---
+
+## E-005 — CI lint step is `continue-on-error`, not blocking
+
+**Decided.** `.github/workflows/ci.yml` runs `npm run lint` but does not fail the
+job on it.
+
+**Why:** running the existing lint config surfaced **11 pre-existing errors**, all
+`react-hooks/set-state-in-effect`, across files this session never touched
+(`src/components/ReviewPrompt.tsx`, `src/hooks/useSpeech.ts`, and others) —
+confirmed pre-existing via `git diff --name-only` against those paths, which came
+back empty. Also already recorded as debt in `docs/architecture-audit.md` §13.
+
+**Alternatives considered:**
+
+| Option | Why not |
+|---|---|
+| Fix the 11 errors so lint can block | Out of Phase 0's scope — "no changes to Adult Mode user workflows," and `useEffect` patterns in production components carry real regression risk to fix casually. A one-line effect change is still a change to code with zero test coverage before this phase. |
+| Make CI fail on lint anyway | A CI job that is permanently red for reasons unrelated to whatever PR is open trains people to stop looking at it — the exact failure mode a safety net exists to prevent. Worse than no CI. |
+| Silently drop the lint step | Loses the signal entirely, including for *new* lint errors Kids Mode code might introduce. |
+
+**What `continue-on-error: true` actually buys:** the step still runs, still
+annotates the PR with every finding, just doesn't fail the job. A new file that
+introduces error #12 is exactly as visible as error #1 through #11 — this doesn't
+hide new problems, it just declines to block on old ones.
+
+**Rollback:** remove `continue-on-error: true`, or fix the 11 pre-existing errors
+first — either restores a fully blocking lint gate.
+
+---
+
+## E-006 — CI workflow lives only in the canonical repository
+
+**Decided.** `.github/workflows/ci.yml` was added to `Hussain5107/forge-saas`
+only, not to the archived copy in `Hussain5107/Claude`.
+
+**Why:** `docs/repository.md` already establishes that FORGE changes go to the
+canonical repository only. A CI workflow is exactly the kind of engineering
+change that document exists to keep out of the archive — Vercel doesn't build
+from the archive, and a workflow running there would test code nobody deploys,
+which is worse than no signal at all.
+
+**Rollback:** delete `.github/workflows/ci.yml` from the canonical repo. Nothing
+depends on it existing.
+
+---
+
+## E-007 — `next build` is not part of the Phase 0 CI job
+
+**Decided** by omission, recorded so it isn't mistaken for an oversight.
+
+Phase 0's stated CI baseline is "linting, type checking, and tests" — build
+verification was not requested. Adding it anyway would have required deciding how
+CI sources Supabase environment values: the landing page (`src/app/page.tsx`) is
+statically generated with `revalidate = 3600` and reads from Supabase at build
+time, so `next build` in a clean CI checkout needs *something* in
+`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` to succeed — either a
+placeholder that makes the build path different from production's, or the real
+public anon key stored as a GitHub Actions secret.
+
+Neither is a default; both are a real choice with a real trade-off, and per the
+instructions' security boundary, secrets — even a publishable anon key — aren't
+something to introduce into CI configuration without stating why. Left for a
+deliberate follow-up decision rather than guessed at here.
+
+**Rollback:** N/A — nothing was added.
+
+---
+
+## E-008 — Pre-existing dependency vulnerabilities: one fixed, two left alone
+
+**Decided.** Installing the three Phase 0 dev dependencies surfaced
+`npm audit` findings. Investigated before doing anything about them.
+
+**`brace-expansion` (high, DoS via unbounded expansion)** — confirmed pre-existing
+(present before this phase's `npm install`, via `eslint`'s dependency tree, not
+introduced by `vitest`/`supabase`). Fixed with `npm audit fix` (no breaking
+change, `eslint` stayed on the same major version).
+
+**`postcss` and `sharp` (high, both bundled inside `next`'s own dependency
+tree)** — confirmed pre-existing. **Not fixed.** The only automatic fix
+(`npm audit fix --force`) downgrades `next` itself to `9.3.3` — a four-major-version
+downgrade of the framework the entire application runs on. That is definitionally
+"a material change to Adult Mode" and stops at the same boundary as every other
+non-negotiable in this project. Flagged here for the owner's awareness; resolving
+it properly means waiting for an upstream Next.js patch or a deliberate, tested
+framework upgrade — neither is Phase 0 work.
+
+**Rollback:** N/A for the fixed one (already the safe, non-breaking option). The
+two left alone were never touched.
+

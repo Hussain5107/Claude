@@ -42,3 +42,8 @@ next-env.d.ts
 
 # database dumps — real user data, never commit these
 /backups
+
+# local artifacts from `supabase start` / `supabase test db` — not the config,
+# just the generated local state
+/supabase/.branches
+/supabase/.temp

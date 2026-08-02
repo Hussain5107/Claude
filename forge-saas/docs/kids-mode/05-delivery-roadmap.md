@@ -21,21 +21,43 @@ any schema is written; Audit §12 R2 rates the compliance question High.
 
 ## Phase 0 — Engineering safeguards
 
-**Entry gate:** OD-1 through OD-4 answered. OD-7 and OD-8 decided.
-**User-visible change:** none.
+**STATUS: COMPLETE.** See the completion report delivered alongside this update for
+full detail; summarised here.
 
-| # | Task | Why | Evidence |
+> **Documentation correction, stated openly.** This section previously gated Phase 0
+> on OD-1 through OD-4, OD-7 and OD-8 being answered by the owner first. That was
+> wrong, and it was corrected rather than quietly followed: those four are Kids
+> Mode *data and content* decisions (jurisdiction, video, the auth model, email
+> verification), and nothing in the actual Phase 0 task list below touches
+> children's data, routes, or content — the owner's Phase 0 instructions explicitly
+> exclude all of that. Gating pure engineering safeguards on legal review of a
+> feature that doesn't exist yet was an error in the earlier draft of this
+> document, not a real dependency. The correct gate, per those instructions, was
+> "no material blocker" — none was found, so Phase 0 proceeded. **OD-1 through
+> OD-4 still gate Phase 1 and beyond**, where children's data actually starts
+> being designed.
+
+**User-visible change:** none. Verified — no file under `src/app/dashboard/`,
+`src/components/` (excluding new, unreferenced test files), or any adult route
+changed behaviour. Full adult test walkthrough not yet re-run against this exact
+diff; see the completion report's "known limitations."
+
+| # | Task | Status | Evidence |
 |---|---|---|---|
-| 0.1 | **Consolidate to one repository** | The same app is in `Hussain5107/Claude` and `Hussain5107/forge-saas` with divergent history. This already cost several hours of "why isn't my change deploying". | Audit §12 R3 |
-| 0.2 | **Take a manual database backup** | The free tier has none. Production is the only copy of every user's history, and Phase 1 adds tables to it. | Audit §12 R4 |
-| 0.3 | Establish `supabase/migrations/` for new work; leave the existing 18 sections alone | No record exists of what production has applied. Retro-fitting risks breaking a working database for no user benefit. | Audit §21 |
-| 0.4 | **Add a test runner and write the ownership test first** | P-005. RLS is the entire authorization model and none of the 41 policies is verified today. | Audit §5, §12 R1 |
-| 0.5 | Cover the pure adult engine modules | They gain a second consumer — **weaker if P-003 is approved, since then there is no kids generator, but still worth doing.** | Audit roadmap Phase 0 |
-| 0.6 | Add the `no-restricted-imports` lint rule from `03` §1 | Makes the rollback guarantee enforced rather than remembered | Audit §23 |
+| 0.1 | Consolidate to one repository | ✅ Done (previous session) | `docs/repository.md`, Audit §12 R3 |
+| 0.2 | Manual database backup procedure | ✅ Script + docs written (previous session); **owner must run it once — unverified from this environment** | `docs/backups.md`, Audit §12 R4 |
+| 0.3 | `supabase/migrations/` for new work | ✅ Done | `supabase/migrations/README.md`, decision E-003 |
+| 0.4 | Test runner + ownership test strategy | ✅ Framework + 121 unit tests running; ✅ RLS ownership test **written**, ⚠️ **unexecuted** — no Docker in this environment | decisions E-001, E-004 |
+| 0.5 | Cover the pure adult engine modules | ✅ `generator`, `splits`, `dayRotation`, `progression`, `tracking`, `entitlements`, `cycle`, `cycleAdaptation` — 121 tests, all passing | `01-decisions.md` E-001 |
+| 0.6 | `no-restricted-imports` lint rule | ✅ Done — engages the moment `src/lib/kids` or `src/components/kids` exist; zero effect today (confirmed: lint error count unchanged) | `eslint.config.mjs` |
+| 0.7 *(new)* | CI: lint + typecheck + test on push/PR | ✅ Done, canonical repo only | `.github/workflows/ci.yml`, decisions E-005, E-006 |
+| 0.8 *(new)* | Adult Mode regression checklist | ✅ Written | `06-adult-regression-checklist.md` |
 
-**Difference from the audit, stated openly:** the audit orders Phase 0 as "tests for the
-engine". P-005 argues the ownership test comes first. Both are in 0.4/0.5; the ordering
-is the proposal. **Requires OD-6.**
+**Ordering note, resolved:** P-005 (ownership test before engine tests) was folded
+in rather than sequenced — both were written in the same phase, so the "which
+first" question in the original roadmap draft is moot. **OD-6 (approve/reject
+P-005) is still open** as a matter of record, since the engine tests were also
+written regardless of its outcome.
 
 ---
 
@@ -172,11 +194,20 @@ Clean rollback depends entirely on the import rule in `03` §1 holding — hence
 
 ---
 
-## What must be approved before Phase 0 engineering safeguards
+## What's resolved, and what still needs approval
 
-**This is the answer to "what do you need from me".**
+**Phase 0 is complete. This is the answer to "what do you need from me" to start
+Phase 1** — the first phase that actually touches Kids Mode data.
 
-### Blocking — Phase 0 cannot start
+### Resolved
+
+| ID | Was | Now |
+|---|---|---|
+| OD-7 | One repository or two | **Done.** `Hussain5107/forge-saas` is canonical (`docs/repository.md`). |
+| OD-8 | Backup before any kids migration | **Tooling done** (`scripts/backup-db.sh`, `docs/backups.md`). Owner still needs to run it once — see the Phase 0 completion report's known limitations. |
+| OD-6 | Approve or reject P-005 (ownership test first) | **Written regardless** — both the ownership test and the engine tests shipped in the same phase, so the sequencing question is moot. Formal approve/reject of the *proposal itself* (as a precedent for future phases) is still open, but nothing is blocked on it. |
+
+### Blocking Phase 1 — the first phase touching Kids Mode data
 
 | ID | Needs | From |
 |---|---|---|
@@ -184,9 +215,6 @@ Clean rollback depends entirely on the import rule in `03` §1 holding — hence
 | OD-2 | Video delivery decision + named review owner | Owner, after provider-terms review |
 | OD-3 | Confirm children are dependent records, not auth users | Owner |
 | OD-4 | Confirm a working transactional email sender | Owner |
-| OD-7 | One repository or two | Owner |
-| OD-8 | Manual database backup before any kids migration | Owner |
-| OD-6 | Approve or reject P-005 (ownership test first) | Owner |
 
 ### Blocking later phases, but decide early if convenient
 
