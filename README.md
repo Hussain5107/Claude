@@ -1,3 +1,16 @@
+> ## ⚠️ The FORGE app is not maintained here
+>
+> This branch contains a copy of the FORGE web app under `forge-saas/`. It is an
+> **archive**. Vercel does not build from it, so changes pushed here never reach
+> production — that has already caused several hours of lost time.
+>
+> **FORGE lives at [`Hussain5107/forge-saas`](https://github.com/Hussain5107/forge-saas)
+> (branch `main`). Push application changes there.**
+>
+> See `forge-saas/docs/repository.md` for the full history of why.
+
+---
+
 # Gym Reminder
 
 A standalone, always-on 6am gym reminder that pushes a real phone notification
