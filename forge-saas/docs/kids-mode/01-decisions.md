@@ -493,3 +493,93 @@ framework upgrade — neither is Phase 0 work.
 **Rollback:** N/A for the fixed one (already the safe, non-breaking option). The
 two left alone were never touched.
 
+---
+
+## E-009 — Playwright, adopted now rather than deferred
+
+**Decided.** `docs/kids-mode/06-adult-regression-checklist.md` originally said real E2E
+coverage was "future work, not Phase 0." Closing the owner's verification gate on the
+regression checklist required actually driving a browser through real auth flows, and
+this sandbox cannot reach any live Supabase project to do that — so a browser-automation
+tool became necessary now, not eventually.
+
+**Why Playwright specifically:** already justified before this was needed —
+`e2e/adult-regression.spec.ts`'s header notes the environment ships with Chromium
+pre-installed and Playwright pre-configured to find it. Using the tool already
+provisioned for this exact purpose, rather than adding a second one, is the smaller
+footprint.
+
+**Scope, deliberately bounded:** one spec file covering what's both high-value and
+reliably scriptable — signup, the sex-dependent cycle question, onboarding, the tab bar,
+display name, theme switching across tabs, and log out. It does **not** attempt gym
+geolocation, photo upload, or PWA install prompts. Scripting a fake geolocation grant or
+a fake file upload would produce a pass/fail signal disconnected from whether the real
+permission dialog and real upload actually work — worse than admitting those still need
+a human. `06-adult-regression-checklist.md` says this explicitly rather than leaving it
+implied.
+
+**Never points at production.** `playwright.config.ts`'s `baseURL` defaults to
+`127.0.0.1:3000`; there is no code path here that accepts or discovers a production URL
+or a production Supabase credential.
+
+**Rollback:** `npm uninstall @playwright/test`, delete `playwright.config.ts` and
+`e2e/`. Nothing in the adult app imports either.
+
+---
+
+## E-010 — One verification workflow does both `supabase test db` and the E2E pass
+
+**Decided.** `.github/workflows/db-tests.yml` (kept its original filename despite now
+covering more) starts the local Supabase stack once and reuses it for both the pgTAP
+run and the Playwright run, rather than two workflows each paying the ~90-second image-pull
+and stack-startup cost separately.
+
+**Real bug this caught, not a hypothetical:** the first execution of the pgTAP test
+failed — not on the RLS logic it was checking, but on its own fixture data. The test
+inserted a row into `public.profiles` by hand immediately after inserting into
+`auth.users`, duplicating what `schema.sql`'s `handle_new_user` trigger already does on
+that same insert. This was invisible in the earlier plain-Postgres rehearsal (§ backup
+verification, this document's evidence trail) because that rehearsal's hand-built
+`auth` schema stub had no such trigger — only a real Supabase `auth.users`, which is
+exactly what a GitHub Actions runner with real Docker access provides, could have
+surfaced it. Fixed in the same commit that added the workflow that found it.
+
+**Rollback:** delete `.github/workflows/db-tests.yml`. Both `supabase test db` and the
+Playwright spec remain runnable by hand from any machine with Docker.
+
+---
+
+## E-011 — Local-only grants step, `schema.sql` left untouched
+
+**Decided.** The second real run of `db-tests.yml` (after E-010's `profiles_pkey` fix)
+failed on a different, genuine error: `permission denied for table cycle_settings`,
+with Postgres's own hint suggesting `GRANT INSERT ON public.cycle_settings TO
+authenticated`. Not an RLS bug — the `authenticated` role had no table-level grant to
+be filtered by RLS in the first place.
+
+**Root cause.** `schema.sql` contains exactly one `grant` statement in the whole file
+(`grant select on public.review_stats to anon, authenticated;`, a view). Every ordinary
+table relies on default privileges a real Supabase project provisions automatically at
+project-creation time, outside of and before `schema.sql` ever runs. A bare `supabase
+start` plus a manual `schema.sql` apply — which is exactly what this CI workflow and
+every earlier local rehearsal in this document did — never receives that provisioning.
+Nothing was wrong with the RLS policies themselves; the gap was in what this repository
+assumes is already in place before `schema.sql` runs, and that assumption has never
+been true of a bare local stack.
+
+**Fix, and why it does not touch `schema.sql`.** Adding explicit `GRANT` statements to
+`schema.sql` was considered and rejected for Phase 0: `schema.sql` is the frozen
+historical record of what's already running against the real production project (see
+`supabase/migrations/README.md`), and the real production project already has these
+grants from its own platform bootstrap — adding them to the file would be a change with
+no adult-facing effect, made under time pressure, to a file this project has
+deliberately treated as append-only via migrations since decision E-003. Instead, the
+fix lives entirely in `.github/workflows/db-tests.yml`, as a step immediately after
+"Apply schema.sql to the local instance" that grants `authenticated`/`anon`/
+`service_role` the same table access a real Supabase project would already have given
+them, plus matching `alter default privileges` so any table added later in the same run
+inherits it too. This is local-test-only plumbing, not a schema change.
+
+**Rollback:** delete the "Grant table privileges" step from `db-tests.yml`. No adult
+code or production schema was touched.
+
