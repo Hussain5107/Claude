@@ -850,3 +850,43 @@ already the shipped state (nothing opens for any real user by this commit alone)
 `src/styles/kids-tokens.css`; drop `child_profiles` and `parent_pins`; drop
 `profiles.kids_mode_enabled`. No existing table, route, or file was altered.
 
+---
+
+## E-018 — `supabase start` auto-applies `supabase/migrations/*.sql`, before schema.sql can run
+
+**Decided.** The first real run of `db-tests.yml` against Phase 1's migration failed
+immediately: `ERROR: relation "public.profiles" does not exist`, on the very first
+statement of `202608030357_kids_mode_foundation.sql` (`alter table public.profiles add
+column...`). Not a bug in the migration's SQL — `public.profiles` is created by
+`schema.sql`, and the error meant schema.sql hadn't run yet at the point this statement
+executed.
+
+**Root cause.** `supabase start` applies everything in `supabase/migrations/` itself,
+automatically, as part of bootstrapping the local Postgres container — logged plainly:
+"Applying migration 202608030357_kids_mode_foundation.sql..." during the *start* step,
+before `db-tests.yml`'s own "Apply schema.sql" step ever runs. This is the Supabase
+CLI's ordinary behaviour for local dev, built on the assumption that `migrations/` is
+the complete schema history from an empty database — the standard model this repo
+deliberately does not follow (`supabase/migrations/README.md`: schema.sql is history,
+migrations/ is everything new, both applied manually, on purpose, to avoid rewriting
+18 sections of unversioned production history into timestamped files for no benefit
+anyone would see). That mismatch had no way to surface until this repo had an actual
+migration file — Phase 1's is the first one ever (`supabase/migrations/README.md`'s own
+"Applied" table said as much), so nothing forced the collision earlier.
+
+**Checked, not guessed:** `supabase start --help` has no flag to skip migration
+application (`--exclude` only takes container names, not "migrations"). No supported
+way to ask the CLI not to do this.
+
+**Fix.** `db-tests.yml` now moves `supabase/migrations/*.sql` to a temp path before
+`supabase start`, runs start with nothing there to auto-apply, moves the files back, and
+only then runs the existing schema.sql-then-migrations step in the intended order. This
+is CI-only workflow plumbing — the migration file, `schema.sql`, and the documented
+convention in `supabase/migrations/README.md` are all untouched. (The later `supabase
+test db` step may auto-apply the migration a second time on top of this — harmless,
+since the migration is written idempotently — `if not exists` / `drop policy if exists`
+throughout, matching schema.sql's own style.)
+
+**Rollback:** delete the two new "move migrations aside" / "restore migrations" steps
+from `db-tests.yml`. Nothing about the actual schema changes.
+
