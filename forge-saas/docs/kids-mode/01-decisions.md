@@ -721,3 +721,132 @@ the primary evidence the 405 bug stays fixed.
 
 **Rollback:** N/A — correctness fix to the test.
 
+---
+
+## E-017 — Kids Mode Phase 1, built from an external draft, corrected against this repo
+
+**Context.** The owner ran a separate Claude session (Bedrock/Opus, no access to this
+repository) with a long, detailed brief covering all of Kids Mode Phases 0–4, and asked
+for that session's output to be checked and merged in here. That draft was ~9,300 lines,
+about half of it literal code/SQL. Before writing anything, it was mapped (not blindly
+pasted) — see the mapping below — and the owner was asked how to treat the fact that it
+proceeds past OD-1 through OD-4 (jurisdiction/legal review, video, the child-as-subject
+confirmation, email verification) without them being resolved. The owner's answer:
+proceed with real implementation, treating those gates as accepted risk for now. This
+entry records what was actually built as a result, and — more importantly — everywhere
+the draft was corrected rather than followed, because it was written without seeing this
+codebase or its own `docs/kids-mode/00-principles.md` through `05-delivery-roadmap.md`.
+
+**What the draft got structurally wrong, and why it wasn't used as-is:**
+
+1. **Its Phase 0 "repository audit" was fabricated.** It guessed a generic
+   `profiles`/`workouts` schema before ever reading this repo. The real schema has
+   `cycle_settings`, `entitlements.ts`, `child_profiles` (this phase) — none of what it
+   guessed. Nothing from its audit was trusted; the real architecture came from this
+   project's own `03-architecture-and-data.md` and `00-principles.md`, written in an
+   earlier phase from an actual audit of this codebase.
+2. **Its routes didn't match this app.** It assumed an `/app/adult/*`, `/app/kids/*`,
+   `/app/parent/*` prefix structure. This app has no `/app` prefix at all — adult routes
+   are `/dashboard/*` at the root. Built instead: `/kids/[child]` and `/parent`, siblings
+   of `/dashboard`, exactly as `00-principles.md` P7 already specified.
+3. **It invented a REST API layer** (`/api/kids/profiles`, `/api/parent/pin/*`, etc.).
+   This repo already has a worked-through decision against that —
+   `03-architecture-and-data.md` §5 — and 23 existing Server Actions across five
+   `actions.ts` files, all shaped the same way (P8). Built instead: `actions.ts` files in
+   the new route folders, same shape as everywhere else in this app. No new HTTP routes.
+4. **It invented a `feature_flags` database table.** This repo already has the
+   mechanism — `src/lib/entitlements.ts`'s `AVAILABLE_ON` map (P9). Used that instead:
+   added `kids_mode` to `Feature`, set to `[]` (closed), plus a new
+   `profiles.kids_mode_enabled` per-account column (roadmap task 1.2) — `hasKidsModeAccess()`
+   requires both. Nothing about "how do child accounts turn Kids Mode on" needed a new
+   table; it needed one more entitlements check.
+5. **`child_profiles.parent_id`, not `parent_user_id`.** The existing architecture doc
+   already named the column `parent_user_id` (`03-architecture-and-data.md` §4), and the
+   existing `rls_own_row.test.sql` header already said the eventual `child_profiles` table
+   "will use the identical shape with `parent_user_id`." Used the name already on record.
+6. **It replaced `src/middleware.ts` wholesale**, including importing
+   `@supabase/auth-helpers-nextjs` — a package not in this repo (which uses `@supabase/ssr`)
+   — and dropping the real `updateSession` logic (the PWA single-use-refresh-token race
+   fix, and the 307→303 redirect-status fix for the 405 bug, both fixed earlier this
+   project). `00-principles.md` P1 explicitly lists `src/middleware.ts`'s matcher as
+   something Kids Mode must not touch. **Net result: zero changes to `src/middleware.ts`
+   or `src/lib/supabase/middleware.ts`.** Not needed — `/kids` and `/parent` are already
+   outside `PUBLIC_PATHS`, so an unauthenticated request is already redirected to
+   `/login` by the existing logic, exactly as `03-architecture-and-data.md` §2 describes.
+   Everything else (the flag check, ownership resolution, the PIN UX gate) happens in
+   route layouts and Server Actions, per that same section.
+7. **It treated the PIN session JWT as if it were the security boundary**, gating
+   `/app/parent/*` on it in middleware. `00-principles.md` P2 says plainly: "a PIN to
+   leave kid mode is a UX feature, never a security boundary." Built accordingly: the
+   real boundary is `auth.uid() = parent_user_id` (RLS) plus `hasKidsModeAccess()`,
+   checked in `/parent/layout.tsx` and again at the top of every Server Action
+   (`requireParentAccess()` in `kidsServer.ts`) — enforced identically whether or not a
+   PIN session cookie exists. The PIN gate sits in a nested `(dashboard)` route group
+   purely as a UX speed bump on top of that, and is skipped entirely for an account that
+   hasn't set one up yet.
+8. **It shipped an insecure fallback secret**
+   (`process.env.PIN_SESSION_SECRET || 'fallback-dev-secret-change-in-production'`) — a
+   real footgun if the env var were ever unset in production. `src/lib/kids/pin.ts`
+   throws instead of falling back, matching this app's existing `process.env.X!` pattern
+   for Supabase keys.
+9. **It wrote unreviewed legal claims** into a drafted `privacy.md` (COPPA/GDPR-K/AADC
+   "compatibility," "consent is implicit"). Not built. `00-principles.md` P10 already
+   covers this: "No legal conclusions... that requires qualified legal review." Nothing
+   with legal-compliance claims was written this phase.
+10. **It used `bcrypt` (native) and left `@types/bcryptjs` mismatched with modern
+    `bcryptjs`.** Used `bcryptjs` (pure JS — no native build step to fail on Vercel) and
+    its own bundled types (bcryptjs ≥3 ships them; `@types/bcryptjs` is for the old 2.x
+    callback API and was removed after being added by mistake).
+
+**What was kept from the draft, adapted:** the general shape of a bcrypt+JWT PIN
+mechanism with attempt lockout; `child_profiles` field shapes (display name, age band,
+preset avatar, no DOB — already required by `04-safety-privacy-content.md` §3 anyway);
+12 animal-themed preset avatars; age bands `4-6`/`7-10`/`11-14`; a 5-profile cap; PIN
+4-6 digits with a 5-attempt/15-minute lockout. None of these contradicted anything
+already decided here, so they were kept as reasonable defaults rather than re-derived
+from scratch, and are recorded as this phase's decisions where `00`–`05` were silent on
+the specific number.
+
+**One decision made here, not in the draft: OD-5 (child index vs UUID in the URL) is
+resolved as P-001 — `/kids/[index]`, index 1-5, unique per parent, never reused.**
+`03-architecture-and-data.md` §3 already recommended this ("better for a product used
+on shared phones... no stable child id in history or screenshots") without deciding it.
+Decided now because Phase 1 needed an actual URL shape to build against.
+
+**What Phase 1 actually is, here, vs the original roadmap.** `05-delivery-roadmap.md`'s
+existing Phase 1/Phase 2 split put schema+flag+ownership-test in Phase 1 and the
+`/parent` surface + child CRUD in Phase 2. The owner's newer brief defines "Phase 1:
+Foundation" as bundling both, plus the PIN gate and the Kids design-system tokens. Built
+to the newer, more detailed definition — it is a superset of the old Phase 1, not a
+contradiction of it — and `05-delivery-roadmap.md` is updated in the same commit as this
+entry to reflect that the two are now merged.
+
+**Files, for the record:** migration
+`supabase/migrations/202608030357_kids_mode_foundation.sql` (profiles.kids_mode_enabled,
+child_profiles, parent_pins); `src/lib/entitlements.ts` (kids_mode, hasKidsModeAccess);
+`src/lib/kids/{types,avatars,pin,kidsServer}.ts` +
+`src/lib/kids/{types,pin}.test.ts`; `src/app/parent/layout.tsx`,
+`src/app/parent/(dashboard)/{layout,page,ParentDashboardClient,actions}.tsx`,
+`src/app/parent/verify-pin/{page,actions}.tsx`; `src/app/kids/[child]/{layout,page}.tsx`;
+`src/styles/kids-tokens.css`; `src/components/kids/{KidsExitLink,ui/KidsButton}.tsx`;
+`supabase/tests/database/rls_child_profiles.test.sql`; two new Playwright specs proving
+`/parent` and `/kids/1` 404 for a real signed-in account while the flag is closed
+(`e2e/adult-regression.spec.ts`); `.github/workflows/db-tests.yml` updated to apply
+`supabase/migrations/*.sql` (it previously only applied `schema.sql`) and to carry a
+throwaway `PIN_SESSION_SECRET` for CI.
+
+**Verification status at the time this entry was written:** typecheck clean, full
+production build clean (all new routes register as dynamic, as expected), lint clean on
+every new file (repo-wide lint has 4 pre-existing errors, all in adult files this phase
+never touched), 135/135 unit tests passing (14 new). The pgTAP ownership test and the
+two new flag-closed Playwright checks have not yet run against a real Supabase local
+stack — that requires the GitHub Actions environment, same as every other real-Postgres
+verification this project has done. Results follow in a subsequent entry or commit,
+honestly, once the workflow has actually run — not assumed from local checks alone.
+
+**Rollback:** unchanged from `03-architecture-and-data.md` §9 — `kids_mode: []` is
+already the shipped state (nothing opens for any real user by this commit alone); delete
+`src/app/kids`, `src/app/parent`, `src/lib/kids`, `src/components/kids`,
+`src/styles/kids-tokens.css`; drop `child_profiles` and `parent_pins`; drop
+`profiles.kids_mode_enabled`. No existing table, route, or file was altered.
+

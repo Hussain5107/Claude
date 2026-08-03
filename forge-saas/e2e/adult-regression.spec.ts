@@ -153,6 +153,22 @@ test.describe.serial("adult regression", () => {
       .toBe(themeAfterOnSettings);
   });
 
+  test("9. /parent 404s while the kids_mode flag is closed, for a real signed-in account", async () => {
+    // AVAILABLE_ON.kids_mode is [] in src/lib/entitlements.ts — closed for
+    // every account regardless of plan or the per-account opt-in column.
+    // Testing signed IN (not signed out) matters: a signed-out visitor would
+    // already be turned away by middleware before ever reaching
+    // hasKidsModeAccess()'s notFound() — this proves that check itself works,
+    // not just the earlier auth redirect.
+    const response = await page.goto("/parent");
+    expect(response?.status()).toBe(404);
+  });
+
+  test("9. /kids/1 404s while the kids_mode flag is closed, for a real signed-in account", async () => {
+    const response = await page.goto("/kids/1");
+    expect(response?.status()).toBe(404);
+  });
+
   test("1. log out returns to the landing page, not an error page", async () => {
     await page.goto("/dashboard/settings");
     // This is the exact bug fixed earlier: a POST /auth/signout that redirected

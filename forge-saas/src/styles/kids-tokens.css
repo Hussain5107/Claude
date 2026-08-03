@@ -1,0 +1,55 @@
+/*
+ * Kids Mode design tokens.
+ *
+ * Scoped entirely under [data-mode="kids"] so nothing here can bleed into
+ * Adult Mode, and imported only from src/app/kids/[child]/layout.tsx — not
+ * the root layout — so adult page loads never ship this CSS
+ * (docs/kids-mode/03-architecture-and-data.md §8: "adult bundles do not grow
+ * while the flag is off, by construction").
+ *
+ * Names are prefixed --kids- specifically so they can never collide with the
+ * adult tokens in src/app/globals.css (--primary, --secondary, etc.) even
+ * though both are in scope on the same page at once when a kids route is
+ * open (the root layout's variables are still inherited).
+ */
+
+[data-mode="kids"] {
+  --kids-primary: #6c63ff;
+  --kids-primary-light: #8b83ff;
+  --kids-secondary: #ff6b6b;
+  --kids-accent-yellow: #ffd93d;
+  --kids-accent-green: #6bcb77;
+  --kids-accent-blue: #4ecdc4;
+  --kids-accent-orange: #ff8c42;
+
+  --kids-bg-primary: #fafbff;
+  --kids-bg-secondary: #f0f0ff;
+  --kids-bg-card: #ffffff;
+
+  --kids-text-primary: #1f2937;
+  --kids-text-secondary: #6b7280;
+  --kids-text-on-primary: #ffffff;
+
+  --kids-border-radius-md: 16px;
+  --kids-border-radius-lg: 24px;
+  --kids-border-radius-full: 9999px;
+  --kids-shadow-md: 0 4px 16px rgba(108, 99, 255, 0.12);
+
+  /* Minimum 44px per WCAG 2.2 target size; 56px is the size actually used by
+     default in this file's components. */
+  --kids-touch-target-min: 44px;
+  --kids-touch-target-preferred: 56px;
+
+  --kids-transition-normal: 250ms ease;
+
+  color: var(--kids-text-primary);
+  background: var(--kids-bg-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-mode="kids"] * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

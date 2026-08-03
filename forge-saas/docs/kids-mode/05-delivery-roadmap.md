@@ -78,20 +78,40 @@ person. The owner runs them before flipping the entitlement in Phase 8.
 
 ## Phase 1 — Foundations (dark)
 
-**Entry gate:** Phase 0 complete. OD-5 decided (URL identifier form).
-**User-visible change:** none. Flag closed.
+**STATUS: BUILT, verification in progress.** See `01-decisions.md` E-017 for the full
+account, including a corrected merge against an external draft.
 
-| # | Task |
-|---|---|
-| 1.1 | `kids_mode` in `AVAILABLE_ON`, set to `[]` — available to nobody |
-| 1.2 | Per-profile opt-in column for allow-list rollout |
-| 1.3 | `child_profiles` table + RLS, all four verbs (`03` §4) |
-| 1.4 | `src/lib/kids/types.ts` |
-| 1.5 | `kidsServer.ts` ownership resolution |
-| 1.6 | The ownership test from 0.4 now runs against real tables |
+**Scope note.** This phase now bundles what an earlier draft of this document split
+across Phase 1 and Phase 2 (the `/parent` surface, child CRUD, and the parent PIN gate),
+per the owner's newer, more detailed Phase 1 brief — see `01-decisions.md` E-017's
+closing section for why. It is a superset of the original Phase 1, not a contradiction
+of it: every task below still holds, plus more.
 
-**Exit criteria:** flag closed means routes are unreachable by direct URL; ownership test
-passes; adult app verifiably unchanged.
+**Entry gate:** Phase 0 complete. OD-5 decided — resolved as P-001, `/kids/[index]`
+(index 1-5, per-parent, never reused). See E-017.
+**User-visible change:** none. Flag closed — `AVAILABLE_ON.kids_mode` is `[]`, so
+`/parent` and `/kids/[child]` 404 for every account regardless of the new
+`profiles.kids_mode_enabled` column's value.
+
+| # | Task | Status | Evidence |
+|---|---|---|---|
+| 1.1 | `kids_mode` in `AVAILABLE_ON`, set to `[]` — available to nobody | ✅ | `src/lib/entitlements.ts` |
+| 1.2 | Per-profile opt-in column for allow-list rollout | ✅ | `profiles.kids_mode_enabled`, migration `202608030357_kids_mode_foundation.sql`; `hasKidsModeAccess()` requires both layers |
+| 1.3 | `child_profiles` table + RLS, all four verbs (`03` §4) | ✅ | Same migration; `parent_pins` table also added (PIN gate, P2 — UX only) |
+| 1.4 | `src/lib/kids/types.ts` | ✅ | Plus `avatars.ts`; unit-tested |
+| 1.5 | `kidsServer.ts` ownership resolution | ✅ | `resolveChildByIndex`, `requireParentAccess`, full child CRUD |
+| 1.6 | The ownership test from 0.4 now runs against real tables | ⏳ | `supabase/tests/database/rls_child_profiles.test.sql` written, copied from `rls_own_row.test.sql` per that file's own instruction; not yet executed against a real Supabase local stack (needs the GitHub Actions run — see below) |
+| 1.7 *(new)* | `/parent` route: layout (auth+flag), PIN-gated dashboard, child CRUD UI, PIN setup/change/remove | ✅ | `src/app/parent/**` |
+| 1.8 *(new)* | `/kids/[child]` route: layout (auth+flag+ownership), stub home | ✅ | `src/app/kids/[child]/**` — real content is Phase 2 |
+| 1.9 *(new)* | Kids design tokens + one UI primitive | ✅ | `src/styles/kids-tokens.css` (imported only from the kids layout, not globally), `KidsButton`, `KidsExitLink` |
+| 1.10 *(new)* | Flag-closed regression proof | ⏳ | Two new Playwright specs in `e2e/adult-regression.spec.ts` asserting `/parent` and `/kids/1` 404 for a real signed-in account; not yet run for real |
+
+**Exit criteria:** flag closed means routes are unreachable by direct URL (built, not yet
+proven by a real CI run); ownership test passes (written, not yet run); adult app
+verifiably unchanged (typecheck, build, lint, and all 135 unit tests pass locally — the
+Playwright Adult regression suite re-run, including the two new flag-closed checks, is
+the remaining real-environment proof, same as every other Postgres-backed check this
+project has done).
 
 ---
 
