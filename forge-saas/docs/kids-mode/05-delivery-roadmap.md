@@ -100,18 +100,24 @@ of it: every task below still holds, plus more.
 | 1.3 | `child_profiles` table + RLS, all four verbs (`03` §4) | ✅ | Same migration; `parent_pins` table also added (PIN gate, P2 — UX only) |
 | 1.4 | `src/lib/kids/types.ts` | ✅ | Plus `avatars.ts`; unit-tested |
 | 1.5 | `kidsServer.ts` ownership resolution | ✅ | `resolveChildByIndex`, `requireParentAccess`, full child CRUD |
-| 1.6 | The ownership test from 0.4 now runs against real tables | ⏳ | `supabase/tests/database/rls_child_profiles.test.sql` written, copied from `rls_own_row.test.sql` per that file's own instruction; not yet executed against a real Supabase local stack (needs the GitHub Actions run — see below) |
+| 1.6 | The ownership test from 0.4 now runs against real tables | ✅ | `supabase/tests/database/rls_child_profiles.test.sql`, copied from `rls_own_row.test.sql` per that file's own instruction. Executed for real on `db-tests.yml` run #10: `Files=2, Tests=12, Result: PASS` (6 assertions each, cycle_settings and child_profiles) |
 | 1.7 *(new)* | `/parent` route: layout (auth+flag), PIN-gated dashboard, child CRUD UI, PIN setup/change/remove | ✅ | `src/app/parent/**` |
 | 1.8 *(new)* | `/kids/[child]` route: layout (auth+flag+ownership), stub home | ✅ | `src/app/kids/[child]/**` — real content is Phase 2 |
 | 1.9 *(new)* | Kids design tokens + one UI primitive | ✅ | `src/styles/kids-tokens.css` (imported only from the kids layout, not globally), `KidsButton`, `KidsExitLink` |
-| 1.10 *(new)* | Flag-closed regression proof | ⏳ | Two new Playwright specs in `e2e/adult-regression.spec.ts` asserting `/parent` and `/kids/1` 404 for a real signed-in account; not yet run for real |
+| 1.10 *(new)* | Flag-closed regression proof | ✅ | Two new Playwright specs in `e2e/adult-regression.spec.ts` asserting `/parent` and `/kids/1` 404 for a real signed-in account. Passed on `db-tests.yml` run #10, part of `14 passed` (12 original Adult regression specs + these 2) |
 
-**Exit criteria:** flag closed means routes are unreachable by direct URL (built, not yet
-proven by a real CI run); ownership test passes (written, not yet run); adult app
-verifiably unchanged (typecheck, build, lint, and all 135 unit tests pass locally — the
-Playwright Adult regression suite re-run, including the two new flag-closed checks, is
-the remaining real-environment proof, same as every other Postgres-backed check this
-project has done).
+**Exit criteria — met, for real, run #10:**
+https://github.com/Hussain5107/forge-saas/actions/runs/30786267672. Flag closed means
+routes are unreachable by direct URL (proven — both new routes 404 for a real signed-in
+account); ownership test passes (12/12 pgTAP assertions); adult app verifiably unchanged
+(typecheck, build, lint, 135/135 unit tests, and all 12 pre-existing Adult regression
+Playwright specs still pass alongside the 2 new ones).
+
+**Still outstanding before this is more than "built and verified in CI":**
+
+1. **The migration has not been run against real production.** `supabase/migrations/README.md`'s "Applied" table is still empty — this is a manual, owner-run step (same as every migration under this convention), and nothing forces it before Phase 2 planning, but Phase 2 work that touches these tables for real should not start until it has been.
+2. **`PIN_SESSION_SECRET` is not yet in Vercel's environment variables** — flagged to the owner directly. Not urgent (the flag is closed, so the code path that reads it never runs in production), but must be added before `AVAILABLE_ON.kids_mode` is ever opened.
+3. **OD-1 through OD-4 remain formally unresolved** — the owner accepted the risk of building Phase 1 ahead of them, but they still gate Phase 2 and beyond in the original roadmap (jurisdiction/legal review, video-provider decision, child-as-subject confirmation, working transactional email). Building further child-facing content without at least OD-1 and OD-3 resolved would be compounding the same accepted risk, not resolving it.
 
 ---
 
