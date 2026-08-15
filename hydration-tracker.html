@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0f1e">
+<title>HydroMe</title>
+<style>
+  :root{
+    --bg:#0a0f1e;
+    --accent:#00bfff;
+    --card:rgba(255,255,255,0.05);
+    --text:#ffffff;
+    --muted:#aac4d0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  html,body{overflow-x:hidden;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:system-ui,-apple-system,sans-serif;
+    min-height:100vh;
+    width:100%;
+    max-width:100%;
+  }
+  button{font-family:inherit;cursor:pointer;border:none;outline:none;}
+  input{font-family:inherit;}
+
+  /* ---------- ONBOARDING ---------- */
+  #onboarding{
+    position:fixed;inset:0;z-index:100;
+    background:var(--bg);
+    display:flex;flex-direction:column;
+    padding:24px;
+    overflow-y:auto;
+  }
+  .ob-step{display:none;flex-direction:column;flex:1;justify-content:center;animation:fadeIn .4s ease;}
+  .ob-step.active{display:flex;}
+  .ob-title{font-size:26px;font-weight:700;text-align:center;margin-bottom:6px;}
+  .ob-sub{font-size:15px;color:var(--muted);text-align:center;margin-bottom:32px;}
+  .gender-grid{display:flex;gap:16px;justify-content:center;}
+  .gender-card{
+    flex:1;max-width:160px;
+    background:var(--card);
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    border:2px solid rgba(255,255,255,0.08);
+    border-radius:16px;
+    padding:24px 12px;
+    display:flex;flex-direction:column;align-items:center;gap:14px;
+    transition:all 0.3s ease;
+    min-height:160px;justify-content:center;
+  }
+  .gender-card.selected{border-color:var(--accent);box-shadow:0 0 18px rgba(0,191,255,0.4);transform:translateY(-2px);}
+  .gender-card span{font-size:17px;font-weight:600;}
+  .gender-card svg{width:64px;height:64px;}
+  .ob-input{
+    width:100%;
+    background:var(--card);
+    border:2px solid rgba(255,255,255,0.08);
+    border-radius:16px;
+    padding:18px;
+    font-size:18px;color:var(--text);text-align:center;
+    transition:all 0.3s ease;
+  }
+  .ob-input:focus{border-color:var(--accent);}
+  .btn-primary{
+    background:var(--accent);
+    color:#04212e;font-weight:700;font-size:18px;
+    border-radius:50px;
+    padding:16px;
+    width:100%;
+    margin-top:28px;
+    min-height:52px;
+    transition:all 0.3s ease;
+  }
+  .btn-primary:active{transform:scale(0.96);}
+  .btn-primary:disabled{opacity:0.4;}
+  .ob-dots{display:flex;gap:8px;justify-content:center;margin-top:24px;}
+  .ob-dots i{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.2);transition:all .3s ease;}
+  .ob-dots i.on{background:var(--accent);width:22px;border-radius:5px;}
+
+  /* ---------- APP ---------- */
+  #app{display:none;flex-direction:column;min-height:100vh;}
+  header{
+    position:sticky;top:0;z-index:30;
+    background:rgba(10,15,30,0.85);
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 16px;
+    border-bottom:1px solid rgba(255,255,255,0.06);
+    gap:8px;
+  }
+  .h-left .app-name{font-size:20px;font-weight:700;color:var(--accent);line-height:1;}
+  .h-left .app-date{font-size:12px;color:var(--muted);margin-top:3px;}
+  .h-right{display:flex;align-items:center;gap:10px;}
+  .weather-badge{
+    background:var(--card);
+    border:1px solid rgba(255,255,255,0.08);
+    border-radius:50px;
+    padding:6px 10px;
+    font-size:12px;color:var(--muted);
+    display:flex;align-items:center;gap:5px;
+    max-width:140px;
+  }
+  .weather-badge .wtemp{color:var(--text);font-weight:600;}
+  .weather-badge .wcity{max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .gear-btn{
+    width:42px;height:42px;min-width:42px;
+    border-radius:50%;
+    background:var(--card);
+    border:1px solid rgba(255,255,255,0.08);
+    display:flex;align-items:center;justify-content:center;
+    transition:all 0.3s ease;
+  }
+  .gear-btn:active{transform:rotate(40deg);}
+  .gear-btn svg{width:22px;height:22px;}
+
+  main{flex:1;padding:16px;display:flex;flex-direction:column;gap:16px;padding-bottom:40px;}
+
+  /* ---------- CHARACTER ---------- */
+  .char-card{
+    background:var(--card);
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    border:2px solid rgba(255,255,255,0.06);
+    border-radius:16px;
+    padding:16px;
+    display:flex;flex-direction:column;align-items:center;
+    transition:all 0.3s ease;
+    position:relative;
+  }
+  .char-card.goal{border-color:var(--accent);animation:glowPulse 1.6s ease-in-out infinite;}
+  @keyframes glowPulse{
+    0%,100%{box-shadow:0 0 12px rgba(0,191,255,0.35);}
+    50%{box-shadow:0 0 30px rgba(0,191,255,0.85);}
+  }
+  .goal-banner{
+    display:none;
+    background:linear-gradient(90deg,#00bfff,#0088cc);
+    color:#04212e;font-weight:700;font-size:15px;
+    padding:8px 16px;border-radius:50px;margin-bottom:10px;
+    animation:popIn .5s ease;
+  }
+  .char-card.goal .goal-banner{display:block;}
+  @keyframes popIn{0%{transform:scale(0.6);opacity:0;}100%{transform:scale(1);opacity:1;}}
+  .figure-wrap{
+    height:38vh;min-height:240px;max-height:360px;
+    display:flex;align-items:center;justify-content:center;
+    position:relative;width:100%;
+  }
+  .figure-wrap svg{height:100%;width:auto;max-width:100%;}
+  .pct-text{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    font-size:30px;font-weight:800;
+    color:#fff;text-shadow:0 2px 10px rgba(0,0,0,0.6);
+    pointer-events:none;
+  }
+
+  /* ---------- PROGRESS ---------- */
+  .progress-info{text-align:center;margin-top:8px;width:100%;}
+  .progress-info .pnums{font-size:17px;font-weight:600;}
+  .progress-info .pnums b{color:var(--accent);}
+  .target-row{font-size:13px;color:var(--muted);margin-top:4px;display:flex;align-items:center;justify-content:center;gap:6px;}
+  .info-btn{
+    width:20px;height:20px;border-radius:50%;
+    background:rgba(0,191,255,0.15);color:var(--accent);
+    font-size:12px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;
+    border:1px solid rgba(0,191,255,0.3);
+  }
+  .pbar{
+    width:100%;height:8px;border-radius:50px;
+    background:rgba(255,255,255,0.08);
+    margin-top:12px;overflow:hidden;
+  }
+  .pbar > span{
+    display:block;height:100%;border-radius:50px;
+    background:linear-gradient(90deg,#00bfff,#00e0ff);
+    width:0%;transition:width 0.6s ease;
+  }
+
+  /* ---------- QUICK ADD ---------- */
+  .quick-grid{
+    display:grid;grid-template-columns:1fr 1fr;gap:12px;
+  }
+  .qbtn{
+    background:var(--card);
+    border:1px solid rgba(0,191,255,0.25);
+    border-radius:50px;
+    color:var(--text);
+    font-size:17px;font-weight:600;
+    padding:18px;min-height:56px;
+    transition:all 0.3s ease;
+    display:flex;align-items:center;justify-content:center;gap:6px;
+  }
+  .qbtn:active{transform:scale(0.94);background:rgba(0,191,255,0.18);}
+  .qbtn small{font-size:12px;color:var(--muted);}
+  .undo-link{
+    text-align:center;color:var(--muted);font-size:14px;
+    margin-top:4px;text-decoration:underline;background:none;
+    width:100%;padding:10px;min-height:44px;
+  }
+  .undo-link:disabled{opacity:0.35;text-decoration:none;}
+
+  /* ---------- CHART ---------- */
+  .chart-card{
+    background:var(--card);
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    border:1px solid rgba(255,255,255,0.06);
+    border-radius:16px;
+    padding:16px;
+    position:relative;
+  }
+  .chart-card h3{font-size:15px;font-weight:600;margin-bottom:12px;color:var(--text);}
+  #chart{width:100%;height:180px;display:block;}
+  .chart-tip{
+    position:absolute;
+    background:#04212e;border:1px solid var(--accent);
+    color:#fff;font-size:12px;padding:6px 10px;border-radius:8px;
+    pointer-events:none;display:none;white-space:nowrap;
+    transform:translate(-50%,-100%);z-index:5;
+  }
+
+  /* ---------- MODALS / PANELS ---------- */
+  .overlay{
+    position:fixed;inset:0;z-index:60;
+    background:rgba(0,0,0,0.6);
+    display:none;align-items:flex-end;justify-content:center;
+    animation:fadeIn .25s ease;
+  }
+  .overlay.center{align-items:center;}
+  .overlay.show{display:flex;}
+  .modal{
+    background:#10182e;
+    border:1px solid rgba(255,255,255,0.1);
+    border-radius:16px;
+    padding:22px;
+    width:calc(100% - 32px);max-width:360px;
+    margin:16px;
+  }
+  .sheet{
+    background:#10182e;
+    border-top-left-radius:20px;border-top-right-radius:20px;
+    padding:22px 20px 32px;
+    width:100%;max-width:420px;
+    animation:slideUp .35s ease;
+    max-height:90vh;overflow-y:auto;
+  }
+  @keyframes slideUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
+  .modal h3,.sheet h3{font-size:19px;font-weight:700;margin-bottom:16px;}
+  .field-label{font-size:13px;color:var(--muted);margin:14px 0 6px;display:block;}
+  .modal input,.sheet input{
+    width:100%;
+    background:rgba(255,255,255,0.06);
+    border:2px solid rgba(255,255,255,0.1);
+    border-radius:12px;padding:14px;font-size:16px;color:var(--text);
+    transition:all 0.3s ease;
+  }
+  .modal input:focus,.sheet input:focus{border-color:var(--accent);}
+  .modal-actions{display:flex;gap:10px;margin-top:20px;}
+  .btn-ghost{
+    flex:1;background:rgba(255,255,255,0.08);color:var(--text);
+    border-radius:50px;padding:14px;font-size:15px;font-weight:600;min-height:48px;
+    transition:all 0.3s ease;
+  }
+  .btn-ghost:active{transform:scale(0.96);}
+  .btn-fill{
+    flex:1;background:var(--accent);color:#04212e;
+    border-radius:50px;padding:14px;font-size:15px;font-weight:700;min-height:48px;
+    transition:all 0.3s ease;
+  }
+  .btn-fill:active{transform:scale(0.96);}
+  .btn-danger{background:#ff4d5e;color:#fff;}
+
+  .setting-row{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 0;border-bottom:1px solid rgba(255,255,255,0.06);
+  }
+  .setting-row .lbl{font-size:15px;}
+  .seg{display:flex;background:rgba(255,255,255,0.06);border-radius:50px;padding:3px;}
+  .seg button{
+    background:none;color:var(--muted);padding:8px 16px;border-radius:50px;font-size:14px;font-weight:600;
+    min-height:40px;transition:all 0.3s ease;
+  }
+  .seg button.on{background:var(--accent);color:#04212e;}
+  .gender-mini{display:flex;gap:10px;}
+  .gender-mini button{
+    flex:1;background:rgba(255,255,255,0.06);color:var(--muted);
+    border-radius:12px;padding:12px;font-size:14px;font-weight:600;min-height:48px;
+    border:2px solid transparent;transition:all 0.3s ease;
+  }
+  .gender-mini button.on{border-color:var(--accent);color:var(--text);background:rgba(0,191,255,0.12);}
+  .setting-btn{
+    width:100%;text-align:left;background:rgba(255,255,255,0.05);
+    border-radius:12px;padding:16px;font-size:15px;color:var(--text);margin-top:12px;min-height:52px;
+    transition:all 0.3s ease;
+  }
+  .setting-btn:active{transform:scale(0.98);}
+  .setting-btn.danger{color:#ff7a86;}
+  .tip-box{
+    font-size:13px;line-height:1.6;color:var(--muted);
+  }
+  .tip-box .row{display:flex;justify-content:space-between;padding:3px 0;}
+  .tip-box .row b{color:var(--text);}
+  .tip-box .total{border-top:1px solid rgba(255,255,255,0.12);margin-top:8px;padding-top:8px;color:var(--accent);font-weight:700;}
+
+  .city-fallback{
+    display:flex;gap:8px;margin-top:6px;
+  }
+  .city-fallback input{flex:1;}
+  .city-fallback button{padding:0 18px;border-radius:12px;background:var(--accent);color:#04212e;font-weight:700;min-height:48px;}
+
+  @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+
+  /* water wave keyframes referenced from SVG-driven element */
+  @keyframes waveMove{from{transform:translateX(0);}to{transform:translateX(-50%);}}
+  @keyframes bob{0%,100%{transform:translateY(0);}50%{transform:translateY(-3px);}}
+</style>
+</head>
+<body>
+
+<!-- ================= ONBOARDING ================= -->
+<div id="onboarding">
+  <div class="ob-step active" data-step="1">
+    <div class="ob-title">Welcome to HydroMe 💧</div>
+    <div class="ob-sub">Let's personalize your daily goal.<br>What's your gender?</div>
+    <div class="gender-grid">
+      <div class="gender-card" data-gender="female" onclick="pickGender('female')">
+        <svg viewBox="0 0 64 64" fill="none" stroke="#00bfff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="32" cy="13" r="8"/>
+          <path d="M32 21 L22 44 L28 44 L26 58 L38 58 L36 44 L42 44 Z"/>
+        </svg>
+        <span>Female</span>
+      </div>
+      <div class="gender-card" data-gender="male" onclick="pickGender('male')">
+        <svg viewBox="0 0 64 64" fill="none" stroke="#00bfff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="32" cy="13" r="8"/>
+          <path d="M24 23 H40 V40 H35 V58 H29 V40 H24 Z"/>
+        </svg>
+        <span>Male</span>
+      </div>
+    </div>
+    <button class="btn-primary" id="ob-next1" onclick="obStep(2)" disabled>Continue</button>
+    <div class="ob-dots"><i class="on"></i><i></i></div>
+  </div>
+
+  <div class="ob-step" data-step="2">
+    <div class="ob-title">How old are you?</div>
+    <div class="ob-sub">We use this to estimate your hydration needs.</div>
+    <input class="ob-input" id="ob-age" type="number" inputmode="numeric" min="1" max="120" placeholder="Enter your age" oninput="validateAge()">
+    <button class="btn-primary" id="ob-go" onclick="finishOnboarding()" disabled>Let's Go 💧</button>
+    <div class="ob-dots"><i></i><i class="on"></i></div>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="app">
+  <header>
+    <div class="h-left">
+      <div class="app-name">HydroMe</div>
+      <div class="app-date" id="hdr-date"></div>
+    </div>
+    <div class="h-right">
+      <div class="weather-badge" id="weather-badge">
+        <span class="wcity">…</span>
+        <span class="wtemp">--°</span>
+        <span class="wemoji">⏳</span>
+      </div>
+      <button class="gear-btn" onclick="openSettings()" aria-label="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#aac4d0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <!-- character -->
+    <div class="char-card" id="char-card">
+      <div class="goal-banner">Goal Reached! 🎉</div>
+      <div class="figure-wrap" id="figure-wrap"></div>
+      <div class="progress-info">
+        <div class="pnums"><b id="p-consumed">0</b> ml / <span id="p-target">0</span> ml</div>
+        <div class="target-row">
+          Daily target
+          <button class="info-btn" onclick="openTip()" aria-label="Target breakdown">i</button>
+        </div>
+        <div class="pbar"><span id="pbar-fill"></span></div>
+      </div>
+    </div>
+
+    <!-- quick add -->
+    <div class="quick-grid">
+      <button class="qbtn" onclick="addWater(200)">+ 200<small>ml</small></button>
+      <button class="qbtn" onclick="addWater(300)">+ 300<small>ml</small></button>
+      <button class="qbtn" onclick="addWater(500)">+ 500<small>ml</small></button>
+      <button class="qbtn" onclick="openCustom()">+ Custom</button>
+    </div>
+    <button class="undo-link" id="undo-btn" onclick="undoLast()" disabled>Undo Last</button>
+
+    <!-- chart -->
+    <div class="chart-card">
+      <h3>Last 7 Days</h3>
+      <canvas id="chart"></canvas>
+      <div class="chart-tip" id="chart-tip"></div>
+    </div>
+  </main>
+</div>
+
+<!-- ===== CUSTOM AMOUNT MODAL ===== -->
+<div class="overlay center" id="custom-overlay">
+  <div class="modal">
+    <h3>Custom Amount</h3>
+    <input id="custom-input" type="number" inputmode="numeric" min="1" max="3000" placeholder="Amount in ml">
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeOverlay('custom-overlay')">Cancel</button>
+      <button class="btn-fill" onclick="confirmCustom()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TARGET TOOLTIP MODAL ===== -->
+<div class="overlay center" id="tip-overlay">
+  <div class="modal">
+    <h3>How we calculated this</h3>
+    <div class="tip-box" id="tip-body"></div>
+    <div class="modal-actions">
+      <button class="btn-fill" onclick="closeOverlay('tip-overlay')">Got it</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== CONFIRM MODAL ===== -->
+<div class="overlay center" id="confirm-overlay">
+  <div class="modal">
+    <h3 id="confirm-title">Are you sure?</h3>
+    <div class="tip-box" id="confirm-msg"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeOverlay('confirm-overlay')">Cancel</button>
+      <button class="btn-fill btn-danger" id="confirm-yes">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SETTINGS SHEET ===== -->
+<div class="overlay" id="settings-overlay">
+  <div class="sheet">
+    <h3>Settings</h3>
+
+    <span class="field-label">Gender</span>
+    <div class="gender-mini" id="set-gender">
+      <button data-g="female" onclick="setGender('female')">Female</button>
+      <button data-g="male" onclick="setGender('male')">Male</button>
+    </div>
+
+    <span class="field-label">Age</span>
+    <input id="set-age" type="number" inputmode="numeric" min="1" max="120" placeholder="Age">
+
+    <div class="setting-row">
+      <span class="lbl">Temperature Unit</span>
+      <div class="seg" id="unit-seg">
+        <button data-u="C" onclick="setUnit('C')">°C</button>
+        <button data-u="F" onclick="setUnit('F')">°F</button>
+      </div>
+    </div>
+
+    <button class="setting-btn" onclick="resetToday()">↺ Reset Today</button>
+    <button class="setting-btn danger" onclick="clearAllHistory()">🗑 Clear All History</button>
+
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeOverlay('settings-overlay')">Close</button>
+      <button class="btn-fill" onclick="saveSettings()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ============ STORAGE KEYS ============ */
+const K_PROFILE = "hydration_profile";
+const K_LOG     = "hydration_log";
+const K_WEATHER = "hydration_weather_cache";
+const K_UNIT    = "hydration_unit";
+const WEATHER_TTL = 3 * 60 * 60 * 1000; // 3 hours
+
+/* ============ STATE ============ */
+let profile = null;        // { gender, age }
+let weather = null;        // { temp, city, emoji, weathercode, fetched_at }
+let unit = "C";            // display unit
+let dailyTarget = 2000;
+let targetBreakdown = {};
+let onboardGender = null;
+let setGenderSel = null;
+
+/* ============ HELPERS ============ */
+function load(key){ try{ return JSON.parse(localStorage.getItem(key)); }catch(e){ return null; } }
+function save(key,val){ localStorage.setItem(key, JSON.stringify(val)); }
+function todayKey(){
+  const d = new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+function getLog(){ return load(K_LOG) || {}; }
+function todayEntries(){ const log=getLog(); return log[todayKey()] || []; }
+function todayTotal(){ return todayEntries().reduce((a,b)=>a+b,0); }
+
+/* ============ ONBOARDING ============ */
+function pickGender(g){
+  onboardGender = g;
+  document.querySelectorAll('#onboarding .gender-card').forEach(c=>{
+    c.classList.toggle('selected', c.dataset.gender===g);
+  });
+  document.getElementById('ob-next1').disabled = false;
+}
+function obStep(n){
+  document.querySelectorAll('.ob-step').forEach(s=>{
+    s.classList.toggle('active', s.dataset.step==String(n));
+  });
+}
+function validateAge(){
+  const v = parseInt(document.getElementById('ob-age').value,10);
+  document.getElementById('ob-go').disabled = !(v>0 && v<=120);
+}
+function finishOnboarding(){
+  const age = parseInt(document.getElementById('ob-age').value,10);
+  if(!onboardGender || !(age>0)) return;
+  profile = { gender:onboardGender, age:age };
+  save(K_PROFILE, profile);
+  document.getElementById('onboarding').style.display='none';
+  startApp();
+}
+
+/* ============ TARGET CALC ============ */
+function estimatedWeight(age, gender){
+  if(age < 13) return 40;
+  if(age <= 17) return 55;
+  if(age <= 40) return gender==='female' ? 65 : 72;
+  if(age <= 60) return gender==='female' ? 68 : 78;
+  return gender==='female' ? 63 : 73;
+}
+function computeTarget(){
+  const age = profile.age, gender = profile.gender;
+  const w = estimatedWeight(age, gender);
+  const basePerKg = gender==='female' ? 31 : 35;
+  let base = w * basePerKg;
+  let val = base;
+
+  let ageMod = 1;
+  if(age < 13){ ageMod = 0.85; }
+  else if(age >= 55){ ageMod = 1.10; }
+  val = val * ageMod;
+
+  // weather modifier
+  const temp = weather ? weather.temp : 25;
+  let weatherAdd = 0;
+  if(temp >= 35) weatherAdd = 500;
+  else if(temp >= 30) weatherAdd = 300;
+  else if(temp >= 25) weatherAdd = 150;
+  else if(temp < 18) weatherAdd = -100;
+  val = val + weatherAdd;
+
+  const clamped = Math.max(1500, Math.min(4000, Math.round(val)));
+
+  targetBreakdown = {
+    weight: w, basePerKg, base: Math.round(base),
+    ageMod, afterAge: Math.round(base*ageMod),
+    temp, weatherAdd, raw: Math.round(val), final: clamped
+  };
+  dailyTarget = clamped;
+  return clamped;
+}
+
+/* ============ WEATHER ============ */
+function codeToEmoji(c){
+  if(c===0) return "☀️";
+  if(c>=1 && c<=3) return "🌤️";
+  if(c>=45 && c<=48) return "🌫️";
+  if(c>=51 && c<=67) return "🌧️";
+  if(c>=71 && c<=77) return "❄️";
+  if(c>=80 && c<=82) return "🌦️";
+  if(c>=95 && c<=99) return "⛈️";
+  return "🌡️";
+}
+async function fetchWeather(){
+  // use cache if fresh
+  const cache = load(K_WEATHER);
+  if(cache && cache.fetched_at && (Date.now()-cache.fetched_at) < WEATHER_TTL){
+    weather = cache;
+    renderWeather();
+    return;
+  }
+  if(!navigator.geolocation){ weatherFallback(); return; }
+  navigator.geolocation.getCurrentPosition(
+    async (pos)=>{
+      const lat = pos.coords.latitude, lon = pos.coords.longitude;
+      try{
+        let city = "Your area";
+        try{
+          const gr = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,{headers:{'Accept':'application/json'}});
+          const gj = await gr.json();
+          city = (gj.address && (gj.address.city||gj.address.town||gj.address.village||gj.address.county||gj.address.state)) || "Your area";
+        }catch(e){}
+        const wr = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m`);
+        const wj = await wr.json();
+        const cw = wj.current_weather;
+        weather = {
+          temp: Math.round(cw.temperature),
+          city: city,
+          emoji: codeToEmoji(cw.weathercode),
+          weathercode: cw.weathercode,
+          fetched_at: Date.now()
+        };
+        save(K_WEATHER, weather);
+        renderWeather();
+        refreshTarget();
+      }catch(e){ weatherFallback(); }
+    },
+    (err)=>{ weatherFallback(); },
+    { enableHighAccuracy:false, timeout:10000, maximumAge:600000 }
+  );
+}
+function weatherFallback(){
+  // If we have an old cache, keep using it
+  const cache = load(K_WEATHER);
+  if(cache && cache.city){
+    weather = cache;
+    renderWeather();
+    return;
+  }
+  // show manual city input fallback, use 25°C
+  const badge = document.getElementById('weather-badge');
+  badge.innerHTML = '<div class="city-fallback"><input id="city-in" placeholder="Enter city" /><button onclick="manualCity()">Set</button></div>';
+}
+function manualCity(){
+  const c = (document.getElementById('city-in').value||"").trim() || "My City";
+  weather = { temp:25, city:c, emoji:"🌡️", weathercode:1, fetched_at:Date.now() };
+  save(K_WEATHER, weather);
+  renderWeather();
+  refreshTarget();
+}
+function displayTemp(t){
+  if(unit==="F") return Math.round(t*9/5+32)+"°F";
+  return t+"°C";
+}
+function renderWeather(){
+  if(!weather) return;
+  const badge = document.getElementById('weather-badge');
+  badge.innerHTML =
+    '<span class="wcity">'+escapeHtml(weather.city)+'</span>'+
+    '<span class="wtemp">'+displayTemp(weather.temp)+'</span>'+
+    '<span class="wemoji">'+weather.emoji+'</span>';
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+/* ============ FIGURE (SVG) ============ */
+// Body path definitions (viewBox 0 0 100 200). Filled bottom-to-top via clip rect.
+const FEMALE_PATH = "M50 8 C44 8 39 13 39 19 C39 25 44 30 50 30 C56 30 61 25 61 19 C61 13 56 8 50 8 Z "+
+  "M50 31 C42 31 36 35 34 43 L28 78 C27 83 33 85 35 80 L40 55 L40 92 L33 150 C32 156 31 178 31 190 C31 195 40 195 41 190 L48 130 L52 130 L59 190 C60 195 69 195 69 190 C69 178 68 156 67 150 L60 92 L60 55 L65 80 C67 85 73 83 72 78 L66 43 C64 35 58 31 50 31 Z";
+const MALE_PATH = "M50 8 C44 8 39 13 39 19 C39 25 44 30 50 30 C56 30 61 25 61 19 C61 13 56 8 50 8 Z "+
+  "M50 31 C43 31 37 34 35 41 L26 80 C25 86 32 88 34 82 L40 58 L40 95 L36 150 C35 158 35 180 36 192 C36 197 45 197 46 192 L49 135 L51 135 L54 192 C55 197 64 197 64 192 C65 180 65 158 64 150 L60 95 L60 58 L66 82 C68 88 75 86 74 80 L65 41 C63 34 57 31 50 31 Z";
+
+function buildFigure(pct){
+  const path = profile.gender==='female' ? FEMALE_PATH : MALE_PATH;
+  // water top y: y=200 is bottom, y=0 top. fill height = pct%
+  const fillH = Math.max(0, Math.min(100, pct));
+  const waterTopY = 200 - (fillH/100)*200;
+  const waveAmp = fillH>0 && fillH<100 ? 3 : 0;
+
+  // Build a wave path for the surface
+  const svg = `
+  <svg viewBox="0 0 100 200" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+    <defs>
+      <clipPath id="bodyClip"><path d="${path}"/></clipPath>
+      <linearGradient id="waterGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#00e0ff"/>
+        <stop offset="100%" stop-color="#0077b6"/>
+      </linearGradient>
+    </defs>
+
+    <!-- empty body -->
+    <path d="${path}" fill="rgba(255,255,255,0.05)" stroke="#00bfff" stroke-width="1.2"/>
+
+    <!-- water group, clipped to body -->
+    <g clip-path="url(#bodyClip)">
+      <rect x="0" y="${waterTopY+3}" width="100" height="200" fill="url(#waterGrad)"/>
+      ${fillH>0 && fillH<100 ? `
+      <g style="animation:waveMove 2.5s linear infinite">
+        <path d="M0 ${waterTopY} q 10 -${waveAmp} 20 0 t 20 0 t 20 0 t 20 0 t 20 0 t 20 0 V200 H0 Z" fill="url(#waterGrad)" opacity="0.9"/>
+      </g>
+      <g style="animation:waveMove 1.8s linear infinite reverse">
+        <path d="M0 ${waterTopY+1} q 10 ${waveAmp} 20 0 t 20 0 t 20 0 t 20 0 t 20 0 t 20 0 V200 H0 Z" fill="#00bfff" opacity="0.35"/>
+      </g>` : ``}
+    </g>
+
+    <!-- outline on top -->
+    <path d="${path}" fill="none" stroke="#00bfff" stroke-width="1.5"/>
+  </svg>`;
+  return svg;
+}
+
+/* ============ RENDER ============ */
+function refreshTarget(){
+  computeTarget();
+  renderAll();
+}
+function renderAll(){
+  const consumed = todayTotal();
+  const target = dailyTarget;
+  const pct = target>0 ? (consumed/target)*100 : 0;
+  const pctClamped = Math.min(100, Math.round(pct));
+
+  // figure
+  document.getElementById('figure-wrap').innerHTML =
+    buildFigure(pct) + '<div class="pct-text">'+pctClamped+'%</div>';
+
+  // numbers
+  document.getElementById('p-consumed').textContent = consumed;
+  document.getElementById('p-target').textContent = target;
+  document.getElementById('pbar-fill').style.width = Math.min(100,pct)+"%";
+
+  // goal state
+  const card = document.getElementById('char-card');
+  card.classList.toggle('goal', consumed >= target);
+
+  // undo
+  document.getElementById('undo-btn').disabled = todayEntries().length===0;
+
+  // header date
+  document.getElementById('hdr-date').textContent =
+    new Date().toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
+
+  drawChart();
+}
+
+/* ============ WATER ACTIONS ============ */
+function addWater(ml){
+  if(!(ml>0)) return;
+  const log = getLog();
+  const tk = todayKey();
+  if(!log[tk]) log[tk] = [];
+  log[tk].push(ml);
+  save(K_LOG, log);
+  renderAll();
+}
+function undoLast(){
+  const log = getLog();
+  const tk = todayKey();
+  if(log[tk] && log[tk].length){
+    log[tk].pop();
+    if(log[tk].length===0) delete log[tk];
+    save(K_LOG, log);
+    renderAll();
+  }
+}
+function openCustom(){
+  document.getElementById('custom-input').value="";
+  showOverlay('custom-overlay');
+  setTimeout(()=>document.getElementById('custom-input').focus(),100);
+}
+function confirmCustom(){
+  const v = parseInt(document.getElementById('custom-input').value,10);
+  if(v>0){ addWater(v); }
+  closeOverlay('custom-overlay');
+}
+
+/* ============ TOOLTIP ============ */
+function openTip(){
+  const b = targetBreakdown;
+  const ageMods = b.ageMod===1 ? "none" : (b.ageMod<1? "×0.85 (under 13)" : "×1.10 (55+)");
+  const wstr = b.weatherAdd>0 ? "+"+b.weatherAdd : (b.weatherAdd<0? String(b.weatherAdd):"0");
+  document.getElementById('tip-body').innerHTML =
+    '<div class="row"><span>Est. weight ('+escapeHtml(profile.gender)+', age '+profile.age+')</span><b>'+b.weight+' kg</b></div>'+
+    '<div class="row"><span>Base ('+b.weight+' × '+b.basePerKg+'ml)</span><b>'+b.base+' ml</b></div>'+
+    '<div class="row"><span>Age modifier</span><b>'+ageMods+'</b></div>'+
+    '<div class="row"><span>After age modifier</span><b>'+b.afterAge+' ml</b></div>'+
+    '<div class="row"><span>Weather ('+displayTemp(b.temp)+')</span><b>'+wstr+' ml</b></div>'+
+    '<div class="row total"><span>Daily Target (clamped 1.5–4L)</span><b>'+b.final+' ml</b></div>';
+  showOverlay('tip-overlay');
+}
+
+/* ============ CHART ============ */
+let chartBars = []; // {x,y,w,h,total,label,dateKey}
+function last7Days(){
+  const arr=[];
+  for(let i=6;i>=0;i--){
+    const d=new Date();
+    d.setDate(d.getDate()-i);
+    const key=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+    arr.push({key, label:d.toLocaleDateString(undefined,{weekday:'short'}), date:d});
+  }
+  return arr;
+}
+function drawChart(){
+  const canvas = document.getElementById('chart');
+  const dpr = window.devicePixelRatio||1;
+  const cssW = canvas.clientWidth || 340;
+  const cssH = 180;
+  canvas.width = cssW*dpr;
+  canvas.height = cssH*dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,cssW,cssH);
+
+  const days = last7Days();
+  const log = getLog();
+  const tk = todayKey();
+  const padBottom = 26, padTop = 16;
+  const chartH = cssH - padBottom - padTop;
+  const slot = cssW/7;
+  const barW = Math.min(30, slot*0.55);
+
+  // determine max for scale (use max of totals and targets fraction)
+  let maxVal = dailyTarget;
+  days.forEach(d=>{ const t=(log[d.key]||[]).reduce((a,b)=>a+b,0); if(t>maxVal) maxVal=t; });
+
+  chartBars = [];
+  ctx.textAlign="center";
+  ctx.font = "11px system-ui, sans-serif";
+
+  days.forEach((d,i)=>{
+    const total = (log[d.key]||[]).reduce((a,b)=>a+b,0);
+    const ratio = dailyTarget>0 ? total/dailyTarget : 0;
+    const h = maxVal>0 ? (total/maxVal)*chartH : 0;
+    const x = i*slot + (slot-barW)/2;
+    const y = padTop + (chartH - h);
+
+    // color
+    let color = "#ff4d5e";
+    if(ratio>=0.8) color="#34d399";
+    else if(ratio>=0.5) color="#ffa94d";
+
+    // bar bg track
+    ctx.fillStyle = "rgba(255,255,255,0.05)";
+    roundRect(ctx, x, padTop, barW, chartH, 5); ctx.fill();
+
+    // bar
+    ctx.fillStyle = color;
+    if(h>0){ roundRect(ctx, x, y, barW, h, 5); ctx.fill(); }
+
+    // today highlight border
+    if(d.key===tk){
+      ctx.strokeStyle = "#00bfff";
+      ctx.lineWidth = 2;
+      roundRect(ctx, x-1, padTop-1, barW+2, chartH+2, 6); ctx.stroke();
+    }
+
+    // label
+    ctx.fillStyle = d.key===tk ? "#00bfff" : "#aac4d0";
+    ctx.fillText(d.label, x+barW/2, cssH-8);
+
+    chartBars.push({x, y:padTop, w:barW, h:chartH, total, label:d.label, key:d.key});
+  });
+}
+function roundRect(ctx,x,y,w,h,r){
+  if(h<=0){h=0;}
+  r = Math.min(r, w/2, h/2||r);
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+function setupChartTap(){
+  const canvas = document.getElementById('chart');
+  const tip = document.getElementById('chart-tip');
+  let tipTimer=null;
+  function handle(e){
+    const rect = canvas.getBoundingClientRect();
+    const cx = (e.touches? e.touches[0].clientX : e.clientX) - rect.left;
+    for(const b of chartBars){
+      if(cx >= b.x-4 && cx <= b.x+b.w+4){
+        tip.style.display="block";
+        tip.style.left = (b.x + b.w/2) + "px";
+        tip.style.top = (b.y + 18) + "px";
+        tip.textContent = b.label+": "+b.total+" ml";
+        clearTimeout(tipTimer);
+        tipTimer = setTimeout(()=>{ tip.style.display="none"; }, 2200);
+        break;
+      }
+    }
+  }
+  canvas.addEventListener('click', handle);
+  canvas.addEventListener('touchstart', handle, {passive:true});
+}
+
+/* ============ OVERLAYS ============ */
+function showOverlay(id){ document.getElementById(id).classList.add('show'); }
+function closeOverlay(id){ document.getElementById(id).classList.remove('show'); }
+
+/* ============ SETTINGS ============ */
+function openSettings(){
+  setGenderSel = profile.gender;
+  document.querySelectorAll('#set-gender button').forEach(b=>b.classList.toggle('on', b.dataset.g===profile.gender));
+  document.getElementById('set-age').value = profile.age;
+  document.querySelectorAll('#unit-seg button').forEach(b=>b.classList.toggle('on', b.dataset.u===unit));
+  showOverlay('settings-overlay');
+}
+function setGender(g){
+  setGenderSel = g;
+  document.querySelectorAll('#set-gender button').forEach(b=>b.classList.toggle('on', b.dataset.g===g));
+}
+function setUnit(u){
+  unit = u;
+  save(K_UNIT, unit);
+  document.querySelectorAll('#unit-seg button').forEach(b=>b.classList.toggle('on', b.dataset.u===u));
+  renderWeather();
+}
+function saveSettings(){
+  const age = parseInt(document.getElementById('set-age').value,10);
+  if(setGenderSel) profile.gender = setGenderSel;
+  if(age>0 && age<=120) profile.age = age;
+  save(K_PROFILE, profile);
+  refreshTarget();
+  closeOverlay('settings-overlay');
+}
+function resetToday(){
+  askConfirm("Reset Today?", "This clears all water logged today. Past days stay intact.", ()=>{
+    const log = getLog();
+    delete log[todayKey()];
+    save(K_LOG, log);
+    refreshTarget();
+    renderAll();
+    closeOverlay('settings-overlay');
+  });
+}
+function clearAllHistory(){
+  askConfirm("Clear All History?", "This permanently deletes ALL your hydration history. This cannot be undone.", ()=>{
+    localStorage.removeItem(K_LOG);
+    renderAll();
+    closeOverlay('settings-overlay');
+  });
+}
+function askConfirm(title,msg,onYes){
+  document.getElementById('confirm-title').textContent = title;
+  document.getElementById('confirm-msg').textContent = msg;
+  const yes = document.getElementById('confirm-yes');
+  const clone = yes.cloneNode(true);
+  yes.parentNode.replaceChild(clone, yes);
+  clone.addEventListener('click', ()=>{ closeOverlay('confirm-overlay'); onYes(); });
+  showOverlay('confirm-overlay');
+}
+
+/* ============ INIT ============ */
+function startApp(){
+  document.getElementById('app').style.display='flex';
+  computeTarget();
+  renderAll();
+  fetchWeather();
+}
+function init(){
+  unit = load(K_UNIT) || "C";
+  profile = load(K_PROFILE);
+  setupChartTap();
+  if(profile && profile.gender && profile.age){
+    document.getElementById('onboarding').style.display='none';
+    startApp();
+  } else {
+    document.getElementById('onboarding').style.display='flex';
+  }
+  // re-render chart on resize
+  window.addEventListener('resize', ()=>{ if(profile) drawChart(); });
+  // handle day rollover when app regains focus
+  document.addEventListener('visibilitychange', ()=>{
+    if(!document.hidden && profile){ renderAll(); }
+  });
+}
+init();
+</script>
+</body>
+</html>
